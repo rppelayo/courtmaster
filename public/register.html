@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Register – CourtMaster</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    function checkPasswordStrength(password) {
+      let strength = 0;
+      if (password.length >= 8) strength++;
+      if (/[A-Z]/.test(password)) strength++;
+      if (/[a-z]/.test(password)) strength++;
+      if (/\d/.test(password)) strength++;
+      if (/[\W_]/.test(password)) strength++;
+
+      const meter = document.getElementById("strength-meter");
+      const label = document.getElementById("strength-label");
+
+      meter.value = strength;
+
+      const levels = ["Very Weak", "Weak", "Fair", "Good", "Strong"];
+      label.textContent = levels[strength - 1] || "";
+    }
+
+    function validateForm(event) {
+      const pw1 = document.getElementById("password").value;
+      const pw2 = document.getElementById("confirm_password").value;
+
+      if (pw1 !== pw2) {
+        event.preventDefault();
+        alert("Passwords do not match!");
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+
+  <div class="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
+    <h1 class="text-2xl font-bold mb-6 text-center text-blue-600">Create Your Account</h1>
+
+    <form action="../api/register.php" method="POST" onsubmit="validateForm(event)" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Full Name</label>
+        <input type="text" name="name" required
+               class="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Email</label>
+        <input type="email" name="email" required
+               class="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Password</label>
+        <input type="password" name="password" id="password" required
+               oninput="checkPasswordStrength(this.value)"
+               class="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+        <meter id="strength-meter" max="5" value="0" class="w-full mt-1"></meter>
+        <p id="strength-label" class="text-xs text-gray-500 mt-1"></p>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Confirm Password</label>
+        <input type="password" id="confirm_password" required
+               class="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+      </div>
+
+      <button type="submit"
+              class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700">
+        Register
+      </button>
+    </form>
+
+    <p class="text-sm text-center text-gray-600 mt-4">
+      Already have an account?
+      <a href="login.html" class="text-blue-600 hover:underline">Login here</a>
+    </p>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>News Feed – CourtMaster</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800">
+
+  <div class="max-w-2xl mx-auto p-6 mt-8 bg-white rounded-xl shadow-lg">
+    <h1 class="text-2xl font-bold text-blue-600 mb-6 text-center">🏀 CourtMaster News Feed</h1>
+
+    <!-- Post Form -->
+    <form id="postForm" class="mb-6">
+      <textarea id="postContent"
+        rows="3"
+        class="w-full p-3 border rounded-lg resize-none focus:outline-none focus:ring"
+        placeholder="What's on your mind?"></textarea>
+      <button type="submit"
+        class="mt-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 float-right">
+        Post
+      </button>
+    </form>
+
+    <!-- Feed -->
+    <div id="feed" class="space-y-4 mt-16"></div>
+  </div>
+
+  <script>
+    // Load posts on page load
+    document.addEventListener('DOMContentLoaded', loadFeed);
+
+    async function loadFeed() {
+      const res = await fetch('../api/newsfeed.php');
+      const posts = await res.json();
+      const feed = document.getElementById('feed');
+      feed.innerHTML = '';
+
+      posts.forEach(post => {
+        const item = document.createElement('div');
+        item.className = 'bg-gray-50 p-4 rounded-lg shadow-sm';
+        item.innerHTML = `
+            <div class="text-sm text-gray-600 mb-1">${post.user_email} • ${post.created_at}</div>
+            <p class="mb-2">${post.content}</p>
+
+            <div class="flex items-center space-x-4 mb-2">
+                <button onclick="likePost(${post.id})" class="text-blue-600 hover:underline">
+                ❤️ Like (${post.likes})
+                </button>
+                <span class="text-sm text-gray-500">${post.comments.length} comments</span>
+            </div>
+
+            <!-- Comments -->
+            <div class="space-y-2 text-sm text-gray-700 ml-2">
+                ${post.comments.map(c => `
+                <div class="bg-gray-100 p-2 rounded">
+                    <span class="font-semibold">${c.user_email}</span>: ${c.content}
+                </div>
+                `).join('')}
+            </div>
+
+            <!-- Add comment -->
+            <form onsubmit="return commentPost(${post.id}, this)" class="mt-2 flex space-x-2">
+                <input type="text" name="comment" class="flex-1 border rounded px-2 py-1" placeholder="Add a comment..." required />
+                <button type="submit" class="text-white bg-blue-500 px-3 py-1 rounded hover:bg-blue-600">Post</button>
+            </form>
+            `;
+
+        feed.appendChild(item);
+      });
+    }
+
+    document.getElementById('postForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const content = document.getElementById('postContent').value.trim();
+      if (!content) return;
+
+      const res = await fetch('../api/newsfeed.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content })
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        document.getElementById('postContent').value = '';
+        loadFeed();
+      } else {
+        alert('Post failed: ' + result.message);
+      }
+    });
+
+    async function likePost(postId) {
+        const res = await fetch('../api/like.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ post_id: postId })
+        });
+        const result = await res.json();
+        if (result.success) {
+            loadFeed();
+        } else {
+            alert(result.message);
+        }
+        }
+
+        async function commentPost(postId, form) {
+        const content = form.comment.value.trim();
+        if (!content) return false;
+
+        const res = await fetch('../api/comment.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ post_id: postId, content })
+        });
+
+        const result = await res.json();
+        if (result.success) {
+            form.reset();
+            loadFeed();
+        } else {
+            alert(result.message);
+        }
+
+        return false;
+        }
+
+  </script>
+</body>
+</html>
