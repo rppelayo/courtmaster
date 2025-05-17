@@ -1,0 +1,48 @@
+<?php
+session_start();
+require_once "../includes/db.php";
+
+header("Content-Type: application/json");
+
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    exit;
+}
+
+$id = $_POST['id'] ?? '';
+$name = $_POST['name'] ?? '';
+$location = $_POST['location'] ?? '';
+$price = $_POST['price'] ?? '';
+$type = $_POST['type'] ?? '';
+$imagePath = null;
+
+if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+    $ext = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
+    $imagePath = uniqid() . '.' . $ext;
+    move_uploaded_file($_FILES['image']['tmp_name'], "../images/courts/$imagePath");
+}
+
+try {
+    if ($id) {
+        // Update existing
+        $fields = "name = ?, location = ?, price = ?, type = ?";
+        $params = [$name, $location, $price, $type];
+
+        if ($imagePath) {
+            $fields .= ", image_path = ?";
+            $params[] = $imagePath;
+        }
+
+        $params[] = $id;
+        $stmt = $pdo->prepare("UPDATE courts SET $fields WHERE id = ?");
+        $stmt->execute($params);
+    } else {
+        // Insert new
+        $stmt = $pdo->prepare("INSERT INTO courts (name, location, price, type, image_path) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$name, $location, $price, $type, $imagePath]);
+    }
+
+    echo json_encode(['success' => true]);
+} catch (PDOException $e) {
+    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+}

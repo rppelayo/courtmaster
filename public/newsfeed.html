@@ -6,10 +6,10 @@
   <title>News Feed – CourtMaster</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 min-h-screen text-gray-800">
+<body class="bg-gray-800 min-h-screen text-gray-800">
 
-  <div class="max-w-2xl mx-auto p-6 mt-8 bg-white rounded-xl shadow-lg">
-    <h1 class="text-2xl font-bold text-blue-600 mb-6 text-center">🏀 CourtMaster News Feed</h1>
+  <div class="max-w-2xl mx-auto p-6 mt-8 bg-gray-800 rounded-xl shadow-lg">
+    <h1 class="text-2xl font-bold text-orange-600 mb-6 text-center">🏀 CourtMaster News Feed</h1>
 
     <!-- Post Form -->
     <form id="postForm" class="mb-6">
@@ -18,7 +18,7 @@
         class="w-full p-3 border rounded-lg resize-none focus:outline-none focus:ring"
         placeholder="What's on your mind?"></textarea>
       <button type="submit"
-        class="mt-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 float-right">
+        class="mt-2 bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700 float-right">
         Post
       </button>
     </form>
@@ -63,7 +63,7 @@
             <!-- Add comment -->
             <form onsubmit="return commentPost(${post.id}, this)" class="mt-2 flex space-x-2">
                 <input type="text" name="comment" class="flex-1 border rounded px-2 py-1" placeholder="Add a comment..." required />
-                <button type="submit" class="text-white bg-blue-500 px-3 py-1 rounded hover:bg-blue-600">Post</button>
+                <button type="submit" class="text-white bg-orange-500 px-3 py-1 rounded hover:bg-orange-600">Post</button>
             </form>
             `;
 
