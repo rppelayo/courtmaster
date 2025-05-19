@@ -113,3 +113,7 @@ Stack trace:
 [17-May-2025 01:59:03 UTC] PHP Warning:  Undefined array key "email" in /home/olanpelayo0788/public_html/courtmaster.online/public/complete_reservation.php on line 102
 [17-May-2025 01:59:19 UTC] PHP Warning:  Undefined array key "email" in /home/olanpelayo0788/public_html/courtmaster.online/public/complete_reservation.php on line 100
 [17-May-2025 01:59:19 UTC] PHP Warning:  Undefined array key "email" in /home/olanpelayo0788/public_html/courtmaster.online/public/complete_reservation.php on line 102
+[17-May-2025 10:02:19 UTC] PHP Warning:  Undefined array key "email" in /home/olanpelayo0788/public_html/courtmaster.online/public/complete_reservation.php on line 100
+[17-May-2025 10:02:19 UTC] PHP Warning:  Undefined array key "email" in /home/olanpelayo0788/public_html/courtmaster.online/public/complete_reservation.php on line 102
+[17-May-2025 21:59:35 UTC] PHP Warning:  Undefined array key "email" in /home/olanpelayo0788/public_html/courtmaster.online/public/complete_reservation.php on line 100
+[17-May-2025 21:59:35 UTC] PHP Warning:  Undefined array key "email" in /home/olanpelayo0788/public_html/courtmaster.online/public/complete_reservation.php on line 102

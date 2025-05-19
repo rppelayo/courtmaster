@@ -28,8 +28,8 @@ $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
   <h1 class="text-2xl text-orange-600 font-bold mb-4">Court Schedules</h1>
 
     <table class="w-full border-collapse border border-gray-300">
-      <thead>
-        <tr class="bg-gray-200">
+      <thead class="bg-gray-800 text-white">
+        <tr class="bg-gray-800">
           <th class="border border-gray-300 px-4 py-2 text-left">Court Name</th>
           <th class="border border-gray-300 px-4 py-2">Actions</th>
         </tr>

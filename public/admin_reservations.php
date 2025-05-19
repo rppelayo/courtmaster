@@ -69,7 +69,7 @@ $reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 <h1 class="text-2xl text-orange-600 font-bold mb-4">All Reservations</h1>
 
     <table class="w-full border border-gray-300">
-      <thead class="bg-gray-200">
+      <thead class="bg-gray-800 text-white">
         <tr>
           <th class="border px-3 py-2">ID</th>
           <th class="border px-3 py-2">User</th>

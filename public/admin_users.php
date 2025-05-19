@@ -27,8 +27,8 @@ $users = $stmt->fetchAll();
   <h1 class="text-2xl text-orange-600 font-bold mb-4">User Management</h1>
 
   <table class="min-w-full bg-white shadow rounded">
-    <thead>
-      <tr class="bg-gray-200 text-left">
+    <thead class="bg-gray-800 text-white">
+      <tr class="bg-gray-800 text-left">
         <th class="p-3">Login</th>
         <th class="p-3">Full Name</th>
         <th class="p-3">Email</th>

@@ -41,19 +41,19 @@ $courts = $stmt->fetchAll();
       <tbody>
         <?php foreach ($courts as $court): ?>
         <tr class="border-t">
-          <td class="px-4 py-2"><?= $court['id'] ?></td>
-          <td class="px-4 py-2"><?= htmlspecialchars($court['name']) ?></td>
-          <td class="px-4 py-2"><?= htmlspecialchars($court['location']) ?></td>
-          <td class="px-4 py-2">P<?= number_format($court['price'], 2) ?></td>
-          <td class="px-4 py-2"><?= htmlspecialchars($court['type'] ?? '') ?></td>
-          <td class="px-4 py-2">
+          <td class="px-4 py-2 text-center"><?= $court['id'] ?></td>
+          <td class="px-4 py-2 text-center"><?= htmlspecialchars($court['name']) ?></td>
+          <td class="px-4 py-2 text-center"><?= htmlspecialchars($court['location']) ?></td>
+          <td class="px-4 py-2 text-center">P<?= number_format($court['price'], 2) ?></td>
+          <td class="px-4 py-2 text-center"><?= htmlspecialchars($court['type'] ?? '') ?></td>
+          <td class="px-4 py-2 text-center">
             <?php if ($court['image_path']): ?>
               <img src="../images/courts/<?= htmlspecialchars($court['image_path']) ?>" class="h-12 rounded" alt="Court image">
             <?php else: ?>
               No image
             <?php endif; ?>
           </td>
-          <td class="px-4 py-2 space-x-2">
+          <td class="px-4 py-2 space-x-2 text-center">
             <button class="text-blue-600" onclick="editCourt(<?= htmlspecialchars(json_encode($court)) ?>)"><i class="fas fa-edit"></i></button>
             <button class="text-red-600" onclick="deleteCourt(<?= $court['id'] ?>)"><i class="fas fa-trash"></i></button>
           </td>

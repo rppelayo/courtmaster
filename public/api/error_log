@@ -1,3 +1,11 @@
 [16-May-2025 12:00:02 UTC] PHP Warning:  Undefined array key "name" in /home/olanpelayo0788/public_html/courtmaster.online/public/api/register.php on line 5
 [16-May-2025 12:00:02 UTC] PHP Warning:  Undefined array key "email" in /home/olanpelayo0788/public_html/courtmaster.online/public/api/register.php on line 6
 [16-May-2025 12:00:02 UTC] PHP Warning:  Undefined array key "password" in /home/olanpelayo0788/public_html/courtmaster.online/public/api/register.php on line 7
+[17-May-2025 03:46:57 UTC] PHP Warning:  Undefined array key "name" in /home/olanpelayo0788/public_html/courtmaster.online/public/api/register.php on line 5
+[17-May-2025 03:47:42 UTC] PHP Warning:  Undefined array key "name" in /home/olanpelayo0788/public_html/courtmaster.online/public/api/register.php on line 5
+[17-May-2025 03:48:02 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens in /home/olanpelayo0788/public_html/courtmaster.online/public/api/register.php:29
+Stack trace:
+#0 /home/olanpelayo0788/public_html/courtmaster.online/public/api/register.php(29): PDOStatement->execute()
+#1 {main}
+  thrown in /home/olanpelayo0788/public_html/courtmaster.online/public/api/register.php on line 29
+[17-May-2025 03:53:28 UTC] PHP Warning:  Undefined array key "contact" in /home/olanpelayo0788/public_html/courtmaster.online/public/api/register.php on line 10
