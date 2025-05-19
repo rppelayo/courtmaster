@@ -70,7 +70,7 @@ try {
     $headers .= "From: CourtMaster <no-reply@courtmaster.online>" . "\r\n";
 
     // Send the email
-    mail($to, $subject, $message, $headers);
+    //mail($to, $subject, $message, $headers);
     // -----------------------------
 
     echo json_encode(['success' => true]);

@@ -16,11 +16,11 @@
     <!-- Step 1: Select sport -->
     <label for="sport-select" class="block text-sm font-medium text-white mb-2">Choose a sport:</label>
     <select id="sport-select" class="w-full border border-gray-300 rounded-lg py-2 pl-3 pr-10 mb-6">
-        <option value="" disabled selected>Select a sport</option>
-        <option value="Basketball/Volleyball">🏀 Basketball/🏐 Volleyball</option> 
-        <option value="Tennis">🎾 Tennis</option>
-        <option value="Badminton">🏸 Badminton</option>
-        <option value="Swimming">🏊 Swimming</option> 
+      <option value="" disabled selected>Select a sport</option>
+      <option value="Basketball">🏀 Basketball</option>
+      <option value="Volleyball">🏐 Volleyball</option>
+      <option value="Tennis">🎾 Tennis</option>
+      <option value="Badminton">🏸 Badminton</option>
     </select>
 
     <!-- Step 2: Select court (dynamically shown after sport) -->
@@ -38,14 +38,8 @@
         </div>
     </div>
 
-    <!-- New Schedule View -->
-    <div id="schedule-view" class="hidden mt-8 bg-white p-4 rounded shadow text-sm overflow-x-auto">
-        <div class="mb-4">
-        <span class="inline-block w-4 h-4 bg-orange-500 mr-2"></span> Available
-        <span class="inline-block w-4 h-4 bg-gray-300 ml-6 mr-2"></span> Reserved
-        </div>
-        <div id="time-table"></div>
-    </div>
+
+  
   </div>
 
   <!-- Modal -->
@@ -101,170 +95,73 @@
         document.getElementById("selected-sport").value = selectedSport;
         calendarContainer.classList.add("hidden");
 
-        // Display loading message
+        // Fetch courts for selected sport from API
         courtList.innerHTML = "Loading courts...";
-
         try {
-            let sportParams = [];
+          const res = await fetch(`/api/get_courts.php?sport=${encodeURIComponent(selectedSport)}`);
+          const courts = await res.json();
 
-            // Handle combined option
-            if (selectedSport === "Basketball/Volleyball") {
-            sportParams = ["Basketball", "Volleyball"];
-            } else {
-            sportParams = [selectedSport];
-            }
-
-            // Fetch courts for each sport and merge results
-            const allCourts = [];
-            for (const sport of sportParams) {
-            const res = await fetch(`/api/get_courts.php?sport=${encodeURIComponent(sport)}`);
-            const courts = await res.json();
-            allCourts.push(...courts);
-            }
-
-            courtList.innerHTML = "";
-            if (allCourts.length === 0) {
+          courtList.innerHTML = "";
+          if (courts.length === 0) {
             courtList.innerHTML = "<p>No courts available for this sport.</p>";
-            } else {
-            allCourts.forEach(court => {
-                const card = document.createElement("div");
-                card.className = "border rounded-lg p-4 bg-gray-50 hover:bg-blue-100 cursor-pointer text-center";
+          } else {
+            courts.forEach(court => {
+              const card = document.createElement("div");
+              card.className = "border rounded-lg p-4 bg-gray-50 hover:bg-blue-100 cursor-pointer text-center";
 
-                card.innerHTML = `
+              card.innerHTML = `
                 <img src="../images/courts/${court.image_path || 'default.jpg'}" alt="${court.name}" class="mx-auto mb-2 rounded h-24 w-full object-cover" />
                 <span class="font-medium">${court.name}</span>
                 <div class="text-sm text-gray-600">Location: ${court.location}</div>
                 <div class="text-sm text-gray-700 font-semibold mt-1">Price: P${parseFloat(court.price).toFixed(2)}</div>
-                `;
-
-                card.onclick = () => {
+              `;
+              card.onclick = () => {
                 selectedCourt = court.name;
                 courtfee = court.price;
                 document.getElementById("selected-court").value = selectedCourt;
                 calendarContainer.classList.remove("hidden");
                 renderCalendar();
-                };
-
-                courtList.appendChild(card);
+              };
+              courtList.appendChild(card);
             });
-            }
-
-            courtSelection.classList.remove("hidden");
-
+          }
+          courtSelection.classList.remove("hidden");
         } catch (error) {
-            courtList.innerHTML = "<p class='text-red-600'>Failed to load courts.</p>";
-            console.error(error);
+          courtList.innerHTML = "<p class='text-red-600'>Failed to load courts.</p>";
+          console.error(error);
         }
-        });
-
+      });
     });
 
 
     function renderCalendar() {
-        if (calendar) calendar.destroy();
-        const calendarEl = document.getElementById("calendar");
-
-        calendar = new FullCalendar.Calendar(calendarEl, {
-            initialView: "dayGridMonth",
-            dateClick: function(info) {
-            const selectedDate = new Date(info.dateStr);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-
-            if (selectedDate < today) return; // prevent selecting past dates
-
-            renderSchedule(info.dateStr);
-            },
-            validRange: {
-            start: new Date().toISOString().split("T")[0] // today in yyyy-mm-dd
-            },
-            height: 650
-        });
-
-        calendar.render();
-        }
-
-
-        async function renderSchedule(date) {
-            const court = selectedCourt;
-            if (!court) return;
-
-            document.getElementById("schedule-view").classList.remove("hidden");
-
-            const reservedTimes = await fetchReservedTimes(date, court);
-            const timeTable = document.getElementById("time-table");
-            timeTable.innerHTML = "";
-
-            const startHour = 8;
-            const endHour = 23;
-            const hours = [];
-            for (let h = startHour; h <= endHour; h++) {
-                hours.push(`${h.toString().padStart(2, '0')}:00:00`);
-            }
-
-            const isBadminton = selectedSport === "Badminton";
-            const rows = isBadminton ? 8 : 1;
-
-            // Add court name and selected date above the table
-            const titleDiv = document.createElement("div");
-            titleDiv.className = "font-semibold text-gray-700 mb-3";
-            titleDiv.textContent = `${selectedSport} – ${court} on ${new Date(date).toLocaleDateString()}`;
-            timeTable.appendChild(titleDiv);
-
-            const table = document.createElement("table");
-            table.className = "min-w-full table-auto border border-gray-300 text-xs";
-            const thead = document.createElement("thead");
-            const headerRow = document.createElement("tr");
-
-            headerRow.appendChild(document.createElement("th")); // Empty top-left cell
-            hours.forEach(h => {
-                const th = document.createElement("th");
-                th.textContent = formatTo12Hour(h);
-                th.className = "border px-1 py-1";
-                headerRow.appendChild(th);
-            });
-            thead.appendChild(headerRow);
-            table.appendChild(thead);
-
-            const tbody = document.createElement("tbody");
-            for (let r = 1; r <= rows; r++) {
-                const tr = document.createElement("tr");
-
-                const rowHeader = document.createElement("td");
-                rowHeader.textContent = isBadminton ? `Section ${r}` : ""; // Only badminton needs row labels
-                rowHeader.className = "border px-1 py-1 font-medium text-gray-700 bg-gray-100 whitespace-nowrap";
-                tr.appendChild(rowHeader);
-
-                hours.forEach(h => {
-                const td = document.createElement("td");
-                td.className = `border h-8 text-center ${
-                    reservedTimes.includes(h) ? "bg-gray-300" : "bg-orange-500 hover:bg-orange-600 cursor-pointer text-white"
-                }`;
-                if (!reservedTimes.includes(h)) {
-                    td.onclick = () => {
-                    const fee = courtfee;
-                    window.location.href = `complete_reservation.php?sport=${selectedSport}&court=${selectedCourt}&date=${date}&time=${h}&fee=${fee}`;
-                    };
-                }
-                tr.appendChild(td);
-                });
-
-                tbody.appendChild(tr);
-            }
-
-            table.appendChild(tbody);
-            timeTable.appendChild(table);
-        }
-
-    // Helper function to convert to 12-hour format
-    function formatTo12Hour(timeStr) {
-        const [hour, minute] = timeStr.split(":");
-        const h = parseInt(hour, 10);
-        const ampm = h >= 12 ? "PM" : "AM";
-        const hour12 = h % 12 === 0 ? 12 : h % 12;
-        return `${hour12}:00 ${ampm}`;
+      if (calendar) calendar.destroy();
+      const calendarEl = document.getElementById("calendar");
+      calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: "dayGridMonth",
+        dateClick: function(info) {
+          openModal(info.dateStr);
+        },
+        height: 650
+      });
+      calendar.render();
     }
 
+    async function openModal(date) {
+      const court = selectedCourt; // Use selectedCourt, which is set via the image grid
+
+      // Ensure the user has selected a court
+      if (!court) {
+        alert("Please select a court first.");
+        return;
+      }
+
+      document.getElementById("modal").classList.remove("hidden");
+      document.getElementById("selected-date").value = date;
+
+      const reservedTimes = await fetchReservedTimes(date, court);
+      renderTimeSlots(reservedTimes);
+    }
 
     function closeModal() {
       document.getElementById("modal").classList.add("hidden");
