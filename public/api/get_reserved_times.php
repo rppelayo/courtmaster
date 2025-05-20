@@ -12,8 +12,9 @@ if (!$date || !$court) {
   exit;
 }
 
-$stmt = $pdo->prepare("SELECT time FROM reservations WHERE date = ? AND court = ?");
+$stmt = $pdo->prepare("SELECT time, section_number FROM reservations WHERE date = ? AND court = ?");
 $stmt->execute([$date, $court]);
-$times = $stmt->fetchAll(PDO::FETCH_COLUMN);
+$times = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 echo json_encode($times);
+

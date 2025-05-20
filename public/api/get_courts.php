@@ -14,7 +14,7 @@ $sport = $_GET['sport'];
 // Assuming you have a "sport" column in courts table.
 // If not, you need to add it or map courts to sports elsewhere.
 
-$stmt = $pdo->prepare("SELECT id, name, location, price, image_path FROM courts WHERE type = ?");
+$stmt = $pdo->prepare("SELECT id, name, location, open_time, close_time, price, image_path FROM courts WHERE type = ?");
 $stmt->execute([$sport]);
 $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

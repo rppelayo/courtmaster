@@ -39,7 +39,7 @@
     </div>
 
     <!-- New Schedule View -->
-    <div id="schedule-view" class="hidden mt-8 bg-white p-4 rounded shadow text-sm overflow-x-auto">
+    <div id="schedule-view" style="height:400px;" class="hidden mt-8 bg-white p-4 rounded shadow text-sm overflow-x-auto">
         <div class="mb-4">
         <span class="inline-block w-4 h-4 bg-orange-500 mr-2"></span> Available
         <span class="inline-block w-4 h-4 bg-gray-300 ml-6 mr-2"></span> Reserved
@@ -95,11 +95,13 @@
       const courtSelection = document.getElementById("court-selection");
       const courtList = document.getElementById("court-list");
       const calendarContainer = document.getElementById("calendar-container");
+      const scheduleContainer = document.getElementById("schedule-view");
 
       sportSelect.addEventListener("change", async function () {
         selectedSport = this.value;
         document.getElementById("selected-sport").value = selectedSport;
         calendarContainer.classList.add("hidden");
+        scheduleContainer.classList.add("hidden");
 
         // Display loading message
         courtList.innerHTML = "Loading courts...";
@@ -117,7 +119,7 @@
             // Fetch courts for each sport and merge results
             const allCourts = [];
             for (const sport of sportParams) {
-            const res = await fetch(`/api/get_courts.php?sport=${encodeURIComponent(sport)}`);
+            const res = await fetch(`api/get_courts.php?sport=${encodeURIComponent(sport)}`);
             const courts = await res.json();
             allCourts.push(...courts);
             }
@@ -139,10 +141,13 @@
 
                 card.onclick = () => {
                 selectedCourt = court.name;
+                selectedCourtOpen = court.open_time;
+                selectedCourtClose = court.close_time;
                 courtfee = court.price;
                 document.getElementById("selected-court").value = selectedCourt;
                 calendarContainer.classList.remove("hidden");
                 renderCalendar();
+                document.getElementById("calendar-container").scrollIntoView({ behavior: "smooth" });
                 };
 
                 courtList.appendChild(card);
@@ -174,11 +179,13 @@
             if (selectedDate < today) return; // prevent selecting past dates
 
             renderSchedule(info.dateStr);
+            document.getElementById("schedule-view").scrollIntoView({ behavior: "smooth" });
             },
             validRange: {
             start: new Date().toISOString().split("T")[0] // today in yyyy-mm-dd
             },
-            height: 650
+            height: 400,
+            width: 400
         });
 
         calendar.render();
@@ -195,9 +202,10 @@
             const timeTable = document.getElementById("time-table");
             timeTable.innerHTML = "";
 
-            const startHour = 8;
-            const endHour = 23;
+            const startHour = parseInt(selectedCourtOpen.split(":")[0], 10);
+            const endHour = parseInt(selectedCourtClose.split(":")[0], 10);
             const hours = [];
+
             for (let h = startHour; h <= endHour; h++) {
                 hours.push(`${h.toString().padStart(2, '0')}:00:00`);
             }
@@ -231,23 +239,40 @@
                 const tr = document.createElement("tr");
 
                 const rowHeader = document.createElement("td");
-                rowHeader.textContent = isBadminton ? `Section ${r}` : ""; // Only badminton needs row labels
+                rowHeader.textContent = isBadminton ? `B-${r}` : ""; // Only badminton needs row labels
                 rowHeader.className = "border px-1 py-1 font-medium text-gray-700 bg-gray-100 whitespace-nowrap";
                 tr.appendChild(rowHeader);
 
                 hours.forEach(h => {
-                const td = document.createElement("td");
-                td.className = `border h-8 text-center ${
-                    reservedTimes.includes(h) ? "bg-gray-300" : "bg-orange-500 hover:bg-orange-600 cursor-pointer text-white"
-                }`;
-                if (!reservedTimes.includes(h)) {
-                    td.onclick = () => {
-                    const fee = courtfee;
-                    window.location.href = `complete_reservation.php?sport=${selectedSport}&court=${selectedCourt}&date=${date}&time=${h}&fee=${fee}`;
-                    };
-                }
-                tr.appendChild(td);
+                  const td = document.createElement("td");
+
+                  const isReserved = reservedTimes.some(rt => {
+                    const sameTime = rt.time === h;
+                    if (isBadminton && rt.section_number != 9) {
+                        return sameTime && Number(rt.section_number) === r;
+                    } else if(isBadminton && rt.section_number == 9){
+                        return true;
+                    } else {
+                        return sameTime;
+                    }
                 });
+
+                  td.className = `border h-8 text-center ${
+                      isReserved
+                          ? "bg-gray-300"
+                          : "bg-orange-500 hover:bg-orange-600 cursor-pointer text-white"
+                  }`;
+
+                  if (!isReserved) {
+                      td.onclick = () => {
+                          const fee = courtfee;
+                          const section = isBadminton ? `${r}` : "";
+                          window.location.href = `complete_reservation.php?sport=${selectedSport}&court=${selectedCourt}&section=${section}&date=${date}&time=${h}&fee=${fee}`;
+                      };
+                  }
+
+                  tr.appendChild(td);
+              });
 
                 tbody.appendChild(tr);
             }
@@ -329,10 +354,10 @@
 
 
     async function fetchReservedTimes(date, court) {
-      const res = await fetch('/api/get_reserved_times.php', {
+      const res = await fetch('api/get_reserved_times.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, court })
+        body: JSON.stringify({ date, court})
       });
       return res.json();
     }

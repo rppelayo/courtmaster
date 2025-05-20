@@ -55,7 +55,7 @@ $user_name = htmlspecialchars($_SESSION['user_name']);
     }
 
     function loadReservations() {
-      fetch('/api/my_reservations.php')
+      fetch('api/my_reservations.php')
         .then(res => res.json())
         .then(data => {
 

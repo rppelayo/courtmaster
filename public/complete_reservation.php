@@ -19,6 +19,7 @@ session_start();
       <h2 class="font-semibold text-xl mb-4">Reservation Information</h2>
       <div id="sport-info" class="mb-2"><strong>Sport:</strong> Basketball</div>
       <div id="court-info" class="mb-2"><strong>Court:</strong> Court A</div>
+      <div id="section-info" class="mb-2"><strong>Section:</strong> Section 1</div>
       <div id="date-info" class="mb-2"><strong>Date:</strong> 2025-04-20</div>
       <div id="time-info" class="mb-2"><strong>Time:</strong> 10:00 AM</div>
     </div>
@@ -88,6 +89,7 @@ session_start();
       // Get the reservation data passed from the previous page
       const sport = new URLSearchParams(window.location.search).get('sport');
       const court = new URLSearchParams(window.location.search).get('court');
+      let section = new URLSearchParams(window.location.search).get('section');
       const date = new URLSearchParams(window.location.search).get('date');
       const time = new URLSearchParams(window.location.search).get('time');
       const fee =  new URLSearchParams(window.location.search).get('fee');
@@ -95,6 +97,7 @@ session_start();
 
       document.getElementById("sport-info").textContent = `Sport: ${sport}`;
       document.getElementById("court-info").textContent = `Court: ${court}`;
+      document.getElementById("section-info").textContent = `Section: ${section ==  0 ? "All" : section}`;
       document.getElementById("date-info").textContent = `Date: ${date}`;
       document.getElementById("time-info").textContent = `Time: ${time}`;
       document.getElementById("email").value = "<?php echo  $_SESSION['email'] ?>";
@@ -112,7 +115,10 @@ session_start();
         const reservationInfo = document.getElementById("reservation-notes").value;
         const paymentMethod = document.querySelector('input[name="payment-method"]:checked').value;
 
-        const res = await fetch("../api/complete_reservation.php", {
+        if(!section) 
+          section = 0;
+
+        const res = await fetch("api/complete_reservation.php", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -123,6 +129,7 @@ session_start();
             paymentMethod,
             sport,
             court,
+            section,
             date,
             time
           })
@@ -132,6 +139,7 @@ session_start();
         if (result.success) {
           document.getElementById("splash-sport").textContent = sport;
           document.getElementById("splash-court").textContent = court;
+          document.getElementById("splash-section").textContent = section == 0 ? "All" : section;
           document.getElementById("splash-date").textContent = date;
           document.getElementById("splash-time").textContent = time;
           document.getElementById("splash-name").textContent = fullName;
@@ -162,6 +170,7 @@ session_start();
         <div class="text-gray-800 mb-4 space-y-1">
           <div><strong>Sport:</strong> <span id="splash-sport"></span></div>
           <div><strong>Court:</strong> <span id="splash-court"></span></div>
+          <div><strong>Section:</strong> <span id="splash-section"></span></div>
           <div><strong>Date:</strong> <span id="splash-date"></span></div>
           <div><strong>Time:</strong> <span id="splash-time"></span></div>
           <div><strong>Name:</strong> <span id="splash-name"></span></div>

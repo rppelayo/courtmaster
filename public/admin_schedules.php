@@ -21,6 +21,7 @@ $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/js/all.min.js" integrity="sha512-b+nQTCdtTBIRIbraqNEwsjB6UvL3UEMkXnhzd8awtCYh0Kcsjl9uEgwVFVbhoj3uu1DO1ZMacNvLoyJJiNfcvg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body class="bg-gray-100">
 
@@ -41,9 +42,8 @@ $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <td class="border border-gray-300 px-4 py-2 text-center">
               <button
                 onclick="openScheduleModal(<?= $court['id'] ?>, '<?= htmlspecialchars($court['name']) ?>')"
-                class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-              >
-                Show Schedule
+                class="text-green-500"
+              ><i class="fas fa-eye"></i>
               </button>
             </td>
           </tr>
@@ -65,6 +65,7 @@ $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
           &times;
         </button>
       </div>
+      <div class="mb-4"><button id="mark-day-off-btn" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded hidden" onclick="markWholeDayUnavailable()"><i class="fas fa-close"></i> Mark Whole Day as Closed</button></div>
       <div id="admin-calendar"></div>
     </div>
   </div>
@@ -84,34 +85,76 @@ $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     async function fetchCourtReservations(courtId) {
-      const res = await fetch('/api/get_court_reservations.php', {
+      const res = await fetch('api/get_court_reservations.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ court_id: courtId })
       });
+
       if (!res.ok) {
         alert('Failed to load reservations');
-        return [];
+        return { reservations: [], openTime: '08:00', closeTime: '22:00' };
       }
-      const reservations = await res.json();
-      return reservations.map(r => ({
-        id: r.id,
-        title: 'Reserved',
-        start: `${r.date}T${r.time}`,
-        allDay: false,
-        color: 'red'
-      }));
+
+      const data = await res.json();
+
+      return {
+        reservations: data.reservations.map(r => ({
+          id: r.id,
+          title: (r.is_admin_set == 1 ? 'Closed' : 'Reserved') + "\nSection: " + r.section_number,
+          start: `${r.date}T${r.time}`,
+          allDay: false,
+          color: r.is_admin_set == 1 ? 'green' : 'red'
+        })),
+        openTime: data.open_time,
+        closeTime: data.close_time
+      };
     }
 
-    function renderAdminCalendar(events) {
+
+    function renderAdminCalendar(eventsData) {
+
+      const { reservations, openTime, closeTime } = eventsData;
+
       if (adminCalendar) {
         adminCalendar.destroy();
       }
       const calendarEl = document.getElementById('admin-calendar');
       adminCalendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'timeGridWeek',
+        initialView: 'timeGridDay',
         height: 600,
-        events: events,
+        slotMinTime: openTime,
+        slotMaxTime: closeTime,
+        selectable: true,
+        events: reservations,
+        select: async function (info) {
+          if (confirm(`Mark ${info.startStr} as NOT AVAILABLE?`)) {
+            const courtId = selectedCourtId;
+            const date = info.startStr.split("T")[0];
+            const time = info.startStr.split("T")[1].slice(0, 5); // HH:MM
+
+            const response = await fetch('api/get_court_reservations.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                court_id: courtId,
+                date: date,
+                time: time,
+                section_number: 9,
+                is_admin_set: 1 // New
+              })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+              alert("Marked as not available!");
+              const events = await fetchCourtReservations(courtId);
+              renderAdminCalendar(events);
+            } else {
+              alert("Failed to save.");
+            }
+          }
+        },
         eventClick: function(info) {
           if (confirm(`Delete this reservation on ${info.event.start.toLocaleString()}?`)) {
             deleteReservation(info.event.id);
@@ -121,13 +164,21 @@ $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
           left: 'prev,next today',
           center: 'title',
           right: 'timeGridWeek,timeGridDay'
+        },
+        viewDidMount: function(info) {
+          const markBtn = document.getElementById('mark-day-off-btn');
+          if (info.view.type === 'timeGridDay' || info.view.type === 'dayGridDay') {
+            markBtn.classList.remove('hidden');
+          } else {
+            markBtn.classList.add('hidden');
+          }
         }
       });
       adminCalendar.render();
     }
 
     async function deleteReservation(reservationId) {
-      const res = await fetch('/api/get_court_reservations.php', {
+      const res = await fetch('api/get_court_reservations.php', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reservation_id: reservationId })
@@ -149,6 +200,51 @@ $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
         adminCalendar = null;
       }
     }
+
+    async function markWholeDayUnavailable() {
+      if (!selectedCourtId || !adminCalendar) return;
+
+      //const currentDate = adminCalendar.getDate().toISOString().split('T')[0];
+      const currentDate = adminCalendar.view.currentStart.toISOString().split('T')[0];
+      if (!confirm(`Mark entire ${currentDate} as closed?`)) return;
+
+      // Fetch court open/close time
+      const res = await fetch('api/get_court_reservations.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ court_id: selectedCourtId })
+      });
+
+      const data = await res.json();
+      const { open_time, close_time } = data;
+
+      const startHour = parseInt(open_time.split(':')[0]);
+      const endHour = parseInt(close_time.split(':')[0]);
+
+      const timeBlocks = [];
+      for (let h = startHour; h < endHour; h++) {
+        timeBlocks.push(`${h.toString().padStart(2, '0')}:00`);
+      }
+
+      // Send multiple reservations (1 hour each block, is_admin_set = 1)
+      for (const time of timeBlocks) {
+        await fetch('api/get_court_reservations.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            court_id: selectedCourtId,
+            date: currentDate,
+            time: time,
+            is_admin_set: 1,
+            section_number: 9
+          })
+        });
+      }
+
+      alert(`Marked ${currentDate} as unavailable.`);
+      adminCalendar.refetchEvents(); // Refresh calendar
+    }
+
   </script>
 </body>
 </html>

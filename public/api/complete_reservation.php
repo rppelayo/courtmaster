@@ -8,7 +8,7 @@ require_once '../includes/db.php';
 $data = json_decode(file_get_contents('php://input'), true);
 
 // Ensure all required fields are provided
-if (!isset($data['fullName'], $data['contactNumber'], $data['email'], $data['paymentMethod'], $data['sport'], $data['court'], $data['date'], $data['time'])) {
+if (!isset($data['fullName'], $data['contactNumber'], $data['email'], $data['paymentMethod'], $data['sport'], $data['court'], $data['section'], $data['date'], $data['time'])) {
     echo json_encode(['success' => false, 'message' => 'Incomplete data']);
     exit;
 }
@@ -22,14 +22,15 @@ $reservationInfo = $data['reservationInfo'];
 $paymentMethod = $data['paymentMethod'];
 $sport = $data['sport'];
 $court = $data['court'];
+$section = $data['section'];
 $date = $data['date'];
 $time = $data['time'];
 
 try {
     // Insert the reservation
-    $stmt = $pdo->prepare("INSERT INTO reservations (user_id, full_name, contact_number, email, reservation_info, payment_method, sport, court, date, time)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$user_id, $fullName, $contactNumber, $email, $reservationInfo, $paymentMethod, $sport, $court, $date, $time]);
+    $stmt = $pdo->prepare("INSERT INTO reservations (user_id, full_name, contact_number, email, reservation_info, payment_method, sport, court, section_number, date, time)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$user_id, $fullName, $contactNumber, $email, $reservationInfo, $paymentMethod, $sport, $court, $section, $date, $time]);
 
     $reservation_id = $pdo->lastInsertId();
 

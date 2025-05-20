@@ -21,13 +21,20 @@ $reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);
   <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/js/all.min.js" integrity="sha512-b+nQTCdtTBIRIbraqNEwsjB6UvL3UEMkXnhzd8awtCYh0Kcsjl9uEgwVFVbhoj3uu1DO1ZMacNvLoyJJiNfcvg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script>
     async function openEditModal(id) {
-      const res = await fetch(`../api/get_reservation.php?id=${id}`);
+      const res = await fetch(`api/get_reservation.php?id=${id}`);
       const data = await res.json();
       if (data && data.success) {
         const reservation = data.reservation;
         document.getElementById('edit-id').value = reservation.id;
         document.getElementById('edit-user').value = reservation.user_id;
         document.getElementById('edit-court').value = reservation.court;
+        if(reservation.section_number == "0") {
+          document.getElementById('section-container').style.display = "none";
+        } else{
+          document.getElementById('section-container').style.display = "block";
+          document.getElementById('edit-section').value = reservation.section_number;
+        }
+        
         document.getElementById('edit-date').value = reservation.date;
         document.getElementById('edit-time').value = reservation.time;
         document.getElementById('payment_status_field').value = reservation.payment_status;
@@ -48,7 +55,7 @@ $reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);
             time: document.getElementById('edit-time').value,
             payment_status: document.getElementById('payment_status_field').value
         };
-      const res = await fetch(`../api/update_reservation.php`, {
+      const res = await fetch(`api/update_reservation.php`, {
         method: 'POST',
         headers: {
         'Content-Type': 'application/json'
@@ -74,6 +81,7 @@ $reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);
           <th class="border px-3 py-2">ID</th>
           <th class="border px-3 py-2">User</th>
           <th class="border px-3 py-2">Court</th>
+          <th class="border px-3 py-2">Section</th>
           <th class="border px-3 py-2">Date</th>
           <th class="border px-3 py-2">Time</th>
           <th class="border px-3 py-2">Payment</th>
@@ -87,6 +95,7 @@ $reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);
           <td class="border px-3 py-2"><?= $r['id'] ?></td>
           <td class="border px-3 py-2"><?= htmlspecialchars($r['user_id']) ?></td>
           <td class="border px-3 py-2"><?= htmlspecialchars($r['court']) ?></td>
+          <td class="border px-3 py-2"><?= htmlspecialchars($r['section_number'] == 0 ? "All" : $r['section_number']) ?></td>
           <td class="border px-3 py-2"><?= htmlspecialchars($r['date']) ?></td>
           <td class="border px-3 py-2"><?= htmlspecialchars($r['time']) ?></td>
           <td class="border px-3 py-2">
@@ -103,7 +112,7 @@ $reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);
               <button class="text-red-500"><i class="fas fa-trash"></i></button>
             </form>
             <?php if ($r['payment_status'] !== 'paid'): ?>
-            <form method="post" action="/api/confirm_payment.php" class="inline" onsubmit="return confirm('Confirm payment for this reservation?')">
+            <form method="post" action="api/confirm_payment.php" class="inline" onsubmit="return confirm('Confirm payment for this reservation?')">
               <input type="hidden" name="id" value="<?= $r['id'] ?>">
               <button class="text-green-500"><i class="fas fa-check"></i></button>
             </form>
@@ -132,6 +141,11 @@ $reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);
           <input type="text" name="court" id="edit-court" class="w-full border px-2 py-1 rounded" readonly>
         </div>
 
+        <div class="mb-3" id="section-container">
+          <label class="block text-sm font-medium">Section</label>
+          <input type="number" name="section" id="edit-section" class="w-full border px-2 py-1 rounded">
+        </div>
+
         <div class="mb-3">
           <label class="block text-sm font-medium">Date</label>
           <input type="date" name="date" id="edit-date" class="w-full border px-2 py-1 rounded">
@@ -139,7 +153,7 @@ $reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         <div class="mb-3">
           <label class="block text-sm font-medium">Time</label>
-          <input type="time" name="time" id="edit-time" class="w-full border px-2 py-1 rounded">
+          <input type="time" step="3600" name="time" id="edit-time" class="w-full border px-2 py-1 rounded">
           <input type="text" name="payment_status" id="payment_status_field" class="w-full hidden border px-2 py-1 rounded">
         </div>
 

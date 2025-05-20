@@ -34,21 +34,39 @@ $courts = $stmt->fetchAll();
           <th class="px-4 py-2">Location</th>
           <th class="px-4 py-2">Price</th>
           <th class="px-4 py-2">Sport</th>
+          <th class="px-4 py-2">Business Hours</th>
           <th class="px-4 py-2">Image</th>
           <th class="px-4 py-2">Actions</th>
         </tr>
       </thead>
       <tbody>
         <?php foreach ($courts as $court): ?>
+        <?php $open_time = DateTime::createFromFormat('H:i',$court['open_time'] ); ?>
+        <?php 
+          if($open_time != null) {
+            $open_time_12 = $open_time -> format('h:i a');
+          }else{
+            $open_time_12 = "00:00 AM";
+          }  
+          ?>
+        <?php $close_time = DateTime::createFromFormat('H:i',$court['close_time']); ?>
+        <?php
+          if($close_time != null) {
+             $close_time_12 = $close_time -> format('h:i a'); 
+          }else{
+            $close_time_12 = "00:00 PM";
+          } 
+         ?>
         <tr class="border-t">
           <td class="px-4 py-2 text-center"><?= $court['id'] ?></td>
           <td class="px-4 py-2 text-center"><?= htmlspecialchars($court['name']) ?></td>
           <td class="px-4 py-2 text-center"><?= htmlspecialchars($court['location']) ?></td>
           <td class="px-4 py-2 text-center">P<?= number_format($court['price'], 2) ?></td>
           <td class="px-4 py-2 text-center"><?= htmlspecialchars($court['type'] ?? '') ?></td>
+          <td class="px-4 py-2 text-center"><?= htmlspecialchars($open_time_12 ?? '') . '-' .htmlspecialchars($close_time_12 ?? '');  ?></td>
           <td class="px-4 py-2 text-center">
             <?php if ($court['image_path']): ?>
-              <img src="../images/courts/<?= htmlspecialchars($court['image_path']) ?>" class="h-12 rounded" alt="Court image">
+              <img src="images/courts/<?= htmlspecialchars($court['image_path']) ?>" class="h-12 rounded" alt="Court image">
             <?php else: ?>
               No image
             <?php endif; ?>
@@ -74,6 +92,14 @@ $courts = $stmt->fetchAll();
           <input type="text" id="courtName" name="name" class="w-full border px-2 py-1 rounded">
         </div>
         <div class="mb-2">
+          <div class="flex flex-col">
+            <label>Open At:</label>
+            <input type="time" id="open_hour" name="open_hour" class="w-full border px-2 py-1 rounded">
+            <label>Close At:</label>
+            <input type="time" id="close_hour" name="close_hour" class="w-full border px-2 py-1 rounded">
+          </div>
+        </div>
+        <div class="mb-2">
           <label>Location</label>
           <input type="text" id="courtLocation" name="location" class="w-full border px-2 py-1 rounded">
         </div>
@@ -85,9 +111,9 @@ $courts = $stmt->fetchAll();
         <label for="courtType" class="block font-medium mb-1">Sport</label>
         <select id="courtType" name="type" class="w-full border px-2 py-1 rounded" required>
             <option value="" disabled selected>Select sport</option>
-            <option value="basketball">Basketball</option>
+            <option value="basketball">Basketball/Volleyball</option>
             <option value="tennis">Tennis</option>
-            <option value="volleyball">Volleyball</option>
+            <option value="swimming">Swimming</option>
             <option value="badminton">Badminton</option>
         </select>
         </div>
@@ -123,11 +149,13 @@ $courts = $stmt->fetchAll();
       document.getElementById("courtPrice").value = court.price;
       document.getElementById("courtType").value = court.type || "";
       document.getElementById("courtModal").classList.remove("hidden");
+      document.getElementById("open_hour").value = court.open_time;
+      document.getElementById("close_hour").value = court.close_time;
     }
 
     function deleteCourt(id) {
       if (confirm("Are you sure you want to delete this court?")) {
-        fetch(`../api/delete_court.php?id=${id}`, { method: 'POST' })
+        fetch(`/api/delete_court.php?id=${id}`, { method: 'POST' })
           .then(res => res.json())
           .then(data => {
             if (data.success) location.reload();
@@ -141,7 +169,7 @@ $courts = $stmt->fetchAll();
       const formData = new FormData(this);
       formData.append("id", document.getElementById("courtId").value);
 
-      fetch("../api/save_court.php", {
+      fetch("api/save_court.php", {
         method: "POST",
         body: formData
       })
