@@ -1,54 +1,46 @@
 <?php
-// api/reserve.php
-
 session_start();
-header('Content-Type: application/json');
 require_once '../includes/db.php';
 
-// Read JSON input
-$data = json_decode(file_get_contents('php://input'), true);
+$full_name = trim($_POST['name']);
+$email = trim($_POST['email']);
+$parts = explode("@", $email);
+$name = $parts[0];
+$password = $_POST['password'];
+$contact = $_POST['contact_number'];
+$user_type = $_POST['user_type'] ?? 'user';
 
-if (!isset($data['sport'], $data['court'], $data['date'], $data['time'])) {
-    echo json_encode(['success' => false, 'message' => 'Incomplete data.']);
-    exit;
+if (!$full_name || !$email || !$password || !$name || !$contact) {
+  die("Missing fields.");
 }
 
-$sport = $data['sport'];
-$court = $data['court'];
-$date = $data['date'];
-$time = $data['time'];
+// Check if user already exists
+$stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+$stmt->execute([$email]);
 
-$user_id = $_SESSION['user_id'] ?? null;
-$guest_name = $data['guest_name'] ?? null;
-$guest_email = $data['guest_email'] ?? null;
-
-// Ensure either logged in or guest info provided
-if (!$user_id && (!$guest_name || !$guest_email)) {
-    echo json_encode(['success' => false, 'message' => 'Guest info missing']);
-    exit;
+if ($stmt->rowCount() > 0) {
+  echo "Email already registered.";
+  exit;
 }
 
-try {
-    // Check for double booking
-    $checkStmt = $pdo->prepare("SELECT id FROM reservations WHERE sport = ? AND court = ? AND date = ? AND time = ?");
-    $checkStmt->execute([$sport, $court, $date, $time]);
+// Hash password (SHA256 for simplicity, use bcrypt in real-world apps)
+$hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
-    if ($checkStmt->rowCount() > 0) {
-        echo json_encode(['success' => false, 'message' => 'This time slot is already taken.']);
-        exit;
-    }
+// Insert new user
+$stmt = $pdo->prepare("INSERT INTO users (name, full_name, email, role, contact_number, password_hash) VALUES (?, ?, ?, ?, ?, ?)");
+$success = $stmt->execute([$name, $full_name, $email, $user_type, $contact, $hashed_password]);
 
-    // Insert reservation
-    if ($user_id) {
-        $stmt = $pdo->prepare("INSERT INTO reservations (user_id, sport, court, date, time) VALUES (?, ?, ?, ?, ?)");
-        $success = $stmt->execute([$user_id, $sport, $court, $date, $time]);
-    } else {
-        $stmt = $pdo->prepare("INSERT INTO reservations (guest_name, guest_email, sport, court, date, time) VALUES (?, ?, ?, ?, ?, ?)");
-        $success = $stmt->execute([$guest_name, $guest_email, $sport, $court, $date, $time]);
-    }
-
-    echo json_encode(['success' => $success]);
-
-} catch (PDOException $e) {
-    echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+if ($success) {
+  // Optionally auto-login the user
+  $_SESSION['user_id'] = $pdo->lastInsertId();
+  $_SESSION['user_name'] = $name;
+  if($user_type === 'user') {
+      header("Location: ../dashboard.php");
+  }else{
+       header("Location: ../admin_dashboard.php");
+  }
+  
+  exit;
+} else {
+  echo "Registration failed.";
 }

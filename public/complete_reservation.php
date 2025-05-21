@@ -137,7 +137,7 @@ session_start();
         const paymentMethod = document.querySelector('input[name="payment-method"]:checked').value;
 
         if(!section) 
-          section = 0;
+          section = 1;
 
         const res = await fetch("api/complete_reservation.php", {
           method: "POST",

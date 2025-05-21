@@ -42,13 +42,14 @@ if (!is_array($timeSlots) || count($timeSlots) === 0) {
     exit;
 }
 
-$section = $data['section']; // could be string or array
+$section = $data['section'] ?? null;
 
-if (is_string($section)) {
-    $section = explode(',', $section);
+// Normalize section into an array of strings
+if (!is_array($section)) {
+    $section = explode(',', (string)$section);
 }
 
-if (!is_array($section) || count($section) === 0) {
+if (count($section) === 0) {
     echo json_encode(['success' => false, 'message' => 'Section must be a non-empty array']);
     exit;
 }

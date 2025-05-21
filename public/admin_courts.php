@@ -20,6 +20,7 @@ if ($user_type === 'admin') {
     $stmt->execute([$user_id]);
 }
 $courts = $stmt->fetchAll();
+
 ?>
 
 <!DOCTYPE html>
@@ -50,6 +51,7 @@ $courts = $stmt->fetchAll();
         </tr>
       </thead>
       <tbody>
+        <?php if(!empty($courts)) { ?>
         <?php foreach ($courts as $court): ?>
         <?php $open_time = DateTime::createFromFormat('H:i',$court['open_time'] ); ?>
         <?php 
@@ -87,6 +89,7 @@ $courts = $stmt->fetchAll();
           </td>
         </tr>
         <?php endforeach; ?>
+        <?php } ?>
       </tbody>
     </table>
   </div>
