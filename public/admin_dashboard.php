@@ -1,10 +1,13 @@
 <?php
 session_start();
 
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] === 'user') {
     header("Location: ../index.html");
     exit;
 }
+
+include 'chatbox.php'; 
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -25,16 +28,18 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
       </button>
     </div>
     <nav class="flex-1 p-4 space-y-4">
-      <button onclick="loadPage('admin_users.php')" class="flex items-center w-full hover:bg-gray-700 px-3 py-2 rounded">
+      <?php if ($_SESSION['role'] === 'admin') { ?>
+      <button id="menu-admin_users" onclick="loadPage('admin_users.php')" class="flex items-center w-full hover:bg-gray-700 px-3 py-2 rounded">
         <i class="fas fa-user mr-3"></i><span class="menu-label">Users</span>
       </button>
-      <button onclick="loadPage('admin_courts.php')" class="flex items-center w-full hover:bg-gray-700 px-3 py-2 rounded">
+      <?php } ?>
+      <button id="menu-admin_courts" onclick="loadPage('admin_courts.php')" class="flex items-center w-full hover:bg-gray-700 px-3 py-2 rounded">
         <i class="fas fa-basketball-ball mr-3"></i><span class="menu-label">Courts</span>
       </button>
-      <button onclick="loadPage('admin_schedules.php')" class="flex items-center w-full hover:bg-gray-700 px-3 py-2 rounded">
+      <button id="menu-admin_schedules" onclick="loadPage('admin_schedules.php')" class="flex items-center w-full hover:bg-gray-700 px-3 py-2 rounded">
         <i class="fas fa-calendar-alt mr-3"></i><span class="menu-label">Schedules</span>
       </button>
-      <button onclick="loadPage('admin_reservations.php')" class="flex items-center w-full hover:bg-gray-700 px-3 py-2 rounded">
+      <button id="menu-admin_reservations" onclick="loadPage('admin_reservations.php')" class="flex items-center w-full hover:bg-gray-700 px-3 py-2 rounded">
         <i class="fas fa-money-bill-wave mr-3"></i><span class="menu-label">Reservations</span>
       </button>
       <button onclick="logout()" class="flex items-center bg-orange-500 hover:bg-orange-600 px-3 py-2 rounded text-white mt-8 w-full">
@@ -45,24 +50,37 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 
   <!-- Main Content -->
   <div class="flex-1 overflow-hidden">
-    <iframe id="content-frame" src="admin_users.php" class="w-full h-full border-none"></iframe>
+     <?php if ($_SESSION['role'] === 'admin') { ?>
+      <iframe id="content-frame" src="admin_users.php" class="w-full h-full border-none"></iframe>
+    <?php } else { ?>
+      <iframe id="content-frame" src="admin_courts.php" class="w-full h-full border-none"></iframe>
+    <?php } ?>
   </div>
 
   <script>
 
     function loadPage(page) {
       document.getElementById('content-frame').src = page;
+      highlightMenu(page);
     }
 
-/*     function toggleSection(sectionId) {
-      document.querySelectorAll('.admin-section').forEach(section => section.classList.add('hidden'));
-      document.getElementById(sectionId).classList.remove('hidden');
-    }
- */
     function logout() {
       fetch("../api/logout.php", { method: "POST" }).then(() => {
         window.location.href = "../index.html";
       });
+    }
+
+    function highlightMenu(page) {
+      // Remove highlight from all menu buttons
+      document.querySelectorAll('nav button').forEach(btn => {
+        btn.classList.remove('bg-gray-700');
+      });
+      
+      // Add highlight to the current page button
+      const btn = document.getElementById('menu-' + page.replace('.php', ''));
+      if (btn) {
+        btn.classList.add('bg-gray-700');
+      }
     }
 
     function toggleSidebar() {
@@ -81,6 +99,11 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
         document.getElementById("sidebar-title").classList.remove("hidden");
       }
     }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const iframe = document.getElementById('content-frame');
+      highlightMenu(iframe.src.split('/').pop()); // get just filename
+    });
   </script>
 </body>
 </html>

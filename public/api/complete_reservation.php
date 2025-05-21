@@ -8,7 +8,7 @@ require_once '../includes/db.php';
 $data = json_decode(file_get_contents('php://input'), true);
 
 // Ensure all required fields are provided
-if (!isset($data['fullName'], $data['contactNumber'], $data['email'], $data['paymentMethod'], $data['sport'], $data['court'], $data['section'], $data['date'], $data['time'])) {
+if (!isset($data['fullName'], $data['contactNumber'], $data['email'], $data['paymentMethod'], $data['sport'], $data['court'], $data['court_id'], $data['section'], $data['date'], $data['time'])) {
     echo json_encode(['success' => false, 'message' => 'Incomplete data']);
     exit;
 }
@@ -18,29 +18,84 @@ $user_id = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : '';
 $fullName = $data['fullName'];
 $contactNumber = $data['contactNumber'];
 $email = $data['email'];
-$reservationInfo = $data['reservationInfo'];
+$reservationInfo = $data['reservationInfo'] ?? '';
 $paymentMethod = $data['paymentMethod'];
 $sport = $data['sport'];
 $court = $data['court'];
+$court_id = $data['court_id'];
 $section = $data['section'];
 $date = $data['date'];
-$time = $data['time'];
+$timeSlots = $data['time']; // Could be string or array
+
+if (is_string($timeSlots)) {
+    $timeSlots = explode(',', $timeSlots);
+}
+
+if (!is_array($timeSlots) || count($timeSlots) === 0) {
+    echo json_encode(['success' => false, 'message' => 'Time slots must be a non-empty array']);
+    exit;
+}
+
+
+if (!is_array($timeSlots) || count($timeSlots) === 0) {
+    echo json_encode(['success' => false, 'message' => 'Time slots must be a non-empty array']);
+    exit;
+}
+
+$section = $data['section']; // could be string or array
+
+if (is_string($section)) {
+    $section = explode(',', $section);
+}
+
+if (!is_array($section) || count($section) === 0) {
+    echo json_encode(['success' => false, 'message' => 'Section must be a non-empty array']);
+    exit;
+}
+
 
 try {
-    // Insert the reservation
-    $stmt = $pdo->prepare("INSERT INTO reservations (user_id, full_name, contact_number, email, reservation_info, payment_method, sport, court, section_number, date, time)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$user_id, $fullName, $contactNumber, $email, $reservationInfo, $paymentMethod, $sport, $court, $section, $date, $time]);
+    // Start transaction
+    $pdo->beginTransaction();
 
-    $reservation_id = $pdo->lastInsertId();
+    // Insert the reservation WITHOUT time column
+    $reservation_ids = [];
 
-    // If guest (no user_id), also save to guest_reservations table
+    foreach ($section as $sec) {
+        // Insert reservation for this section number
+        $stmt = $pdo->prepare("INSERT INTO reservations (user_id, full_name, contact_number, email, reservation_info, payment_method, sport, court, court_id, section_number, date)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$user_id, $fullName, $contactNumber, $email, $reservationInfo, $paymentMethod, $sport, $court, $court_id, $sec, $date]);
+
+        $reservation_id = $pdo->lastInsertId();
+        $reservation_ids[] = $reservation_id;
+
+        // Insert all time slots for this reservation & section
+        $slotStmt = $pdo->prepare("INSERT INTO reservation_slots (reservation_id, time, section_number) VALUES (?, ?, ?)");
+        foreach ($timeSlots as $slotTime) {
+            $slotStmt->execute([$reservation_id, $slotTime, $sec]);
+        }
+    }
+
+    // Handle guest_reservations for all reservation ids
     if (!$user_id) {
         $guest_stmt = $pdo->prepare("INSERT INTO reservation_guests (reservation_id, guest_name, guest_contact)
                                      VALUES (?, ?, ?)");
-        $guest_stmt->execute([$reservation_id, $fullName, $contactNumber]);
+        foreach ($reservation_ids as $rid) {
+            $guest_stmt->execute([$rid, $fullName, $contactNumber]);
+        }
     }
-    
+
+    // Commit transaction
+    $pdo->commit();
+
+    // Format the times as a list for the email
+    $timesListHtml = '<ul>';
+    foreach ($timeSlots as $slotTime) {
+        $timesListHtml .= "<li>{$slotTime}</li>";
+    }
+    $timesListHtml .= '</ul>';
+
     $to = $email;
     $subject = "Your CourtMaster Reservation Confirmation";
 
@@ -54,7 +109,7 @@ try {
             <li><strong>Sport:</strong> {$sport}</li>
             <li><strong>Court:</strong> {$court}</li>
             <li><strong>Date:</strong> {$date}</li>
-            <li><strong>Time:</strong> {$time}</li>
+            <li><strong>Time Slots:</strong> {$timesListHtml}</li>
             <li><strong>Payment Method:</strong> {$paymentMethod}</li>
             <li><strong>Additional Info:</strong> {$reservationInfo}</li>
             <li><strong>Fee:</strong> P250.00</li>
@@ -71,11 +126,12 @@ try {
     $headers .= "From: CourtMaster <no-reply@courtmaster.online>" . "\r\n";
 
     // Send the email
-    //mail($to, $subject, $message, $headers);
-    // -----------------------------
+    // mail($to, $subject, $message, $headers);
 
     echo json_encode(['success' => true]);
 } catch (PDOException $e) {
+    // Rollback on error
+    $pdo->rollBack();
     echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
 }
 ?>

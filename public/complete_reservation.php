@@ -89,20 +89,41 @@ session_start();
       // Get the reservation data passed from the previous page
       const sport = new URLSearchParams(window.location.search).get('sport');
       const court = new URLSearchParams(window.location.search).get('court');
+      const court_id = new URLSearchParams(window.location.search).get('court_id');
       let section = new URLSearchParams(window.location.search).get('section');
       const date = new URLSearchParams(window.location.search).get('date');
       const time = new URLSearchParams(window.location.search).get('time');
       const fee =  new URLSearchParams(window.location.search).get('fee');
       let email = new URLSearchParams(window.location.search).get('email');
-
+      
       document.getElementById("sport-info").textContent = `Sport: ${sport}`;
       document.getElementById("court-info").textContent = `Court: ${court}`;
       document.getElementById("section-info").textContent = `Section: ${section ==  0 ? "All" : section}`;
       document.getElementById("date-info").textContent = `Date: ${date}`;
-      document.getElementById("time-info").textContent = `Time: ${time}`;
+      //document.getElementById("time-info").textContent = `Time: ${time}`;
       document.getElementById("email").value = "<?php echo  $_SESSION['email'] ?>";
 
       email = "<?php echo  $_SESSION['email'] ?>";
+
+      const formatTo12Hour = (timeStr) => {
+          const [hour, minute] = timeStr.split(":").map(Number);
+          const ampm = hour >= 12 ? "PM" : "AM";
+          const formattedHour = (hour % 12 || 12).toString();
+          return `${formattedHour}:${minute.toString().padStart(2, "0")} ${ampm}`;
+      };
+
+      const timeArray = typeof time === "string" ? time.split(",") : [];
+
+      if (timeArray.length > 0) {
+          const startTime = formatTo12Hour(timeArray[0]);
+          const endTime = formatTo12Hour(timeArray[timeArray.length - 1]);
+          document.getElementById("time-info").textContent = `Time: ${startTime} - ${endTime}`;
+      } else {
+          document.getElementById("time-info").textContent = "Time: N/A";
+      }
+
+
+
 
       // Assuming the fee is constant for now, adjust as needed.
       document.getElementById("fee").value = "P"+fee; 
@@ -129,6 +150,7 @@ session_start();
             paymentMethod,
             sport,
             court,
+            court_id,
             section,
             date,
             time
@@ -150,12 +172,12 @@ session_start();
           document.getElementById("splash-screen").classList.remove("hidden");
         
           setTimeout(() => {
-            window.location.href = "dashboard.php";
+            window.location.href = "reserve.html";
           }, 3000);
         
           // Manual close handler
           document.getElementById("close-splash").addEventListener("click", () => {
-            window.location.href = "dashboard.php";
+            window.location.href = "reserve.html";
           });
         } else {
           alert("Error: " + result.message);

@@ -1,10 +1,10 @@
 <?php
 session_start();
 
- if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
-    header("Location: index.html");
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] === 'user') {
+    header("Location: ../index.html");
     exit;
-} 
+}
 
 require_once 'includes/db.php';
 

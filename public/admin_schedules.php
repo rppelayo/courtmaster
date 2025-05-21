@@ -2,13 +2,20 @@
 session_start();
 require_once "includes/db.php";
 // Redirect if not admin
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
-    header("Location: index.html");
-    exit();
-  }
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] === 'user') {
+    header("Location: ../index.html");
+    exit;
+}
 
+$user_id = $_SESSION['user_id'];
 // Fetch all courts from DB
-$stmt = $pdo->query("SELECT id, name FROM courts ORDER BY name");
+if($_SESSION['role'] === 'owner') {
+  $stmt = $pdo->prepare("SELECT * FROM courts WHERE owner_id = ?");
+  $stmt->execute([$user_id]);
+}else{
+  $stmt = $pdo->query("SELECT * FROM courts");
+}
+
 $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
@@ -80,41 +87,69 @@ $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
       document.getElementById('schedule-modal').classList.remove('hidden');
 
       // Fetch and render reservations
-      const events = await fetchCourtReservations(courtId);
-      renderAdminCalendar(events);
+      //const events = await fetchCourtReservations(courtId);
+      renderAdminCalendar();//(events);
     }
 
     async function fetchCourtReservations(courtId) {
-      const res = await fetch('api/get_court_reservations.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("api/get_court_reservations.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ court_id: courtId })
       });
 
       if (!res.ok) {
-        alert('Failed to load reservations');
-        return { reservations: [], openTime: '08:00', closeTime: '22:00' };
+        alert("Failed to load reservations");
+        return { reservations: [], openTime: "08:00", closeTime: "22:00" };
       }
 
       const data = await res.json();
 
+      /* Build an array of FullCalendar event objects */
+      const events = [];
+
+      data.reservations.forEach(r => {
+        if (!r.time_slots) return; // safety check
+        
+        // Remove duplicate times by using a Set
+        const slotSet = new Set(r.time_slots.split(",").map(s => s.trim()));
+        
+        // section_number is a single number, so make it an array for easy looping
+        const sections = [r.section_number.toString()];
+        
+        slotSet.forEach(slot => {
+          const [hour, minute] = slot.split(":").map(Number);
+          const start = `${r.date}T${slot}`;
+          const endHour = hour + 1;
+          const end = `${r.date}T${endHour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}:00`;
+          
+          sections.forEach(section => {
+            const sectionLabel = (section === "9" || section === "0") ? "All" : section;
+            events.push({
+              id: `${r.id}-${slot}-${section}`,  // unique id per reservation/time/section
+              title: (r.is_admin_set == 1 ? "Closed" : "Reserved") + "\nSection: " + sectionLabel,
+              start,
+              end,
+              allDay: false,
+              color: r.is_admin_set == 1 ? "green" : "red"
+            });
+          });
+        });
+      });
+
+
       return {
-        reservations: data.reservations.map(r => ({
-          id: r.id,
-          title: (r.is_admin_set == 1 ? 'Closed' : 'Reserved') + "\nSection: " + r.section_number,
-          start: `${r.date}T${r.time}`,
-          allDay: false,
-          color: r.is_admin_set == 1 ? 'green' : 'red'
-        })),
+        reservations: events,
         openTime: data.open_time,
         closeTime: data.close_time
       };
     }
 
 
-    function renderAdminCalendar(eventsData) {
 
-      const { reservations, openTime, closeTime } = eventsData;
+    async function renderAdminCalendar() {
+      const { reservations, openTime, closeTime } = await fetchCourtReservations(selectedCourtId);
+      //const { reservations, openTime, closeTime } = eventsData;
 
       if (adminCalendar) {
         adminCalendar.destroy();
@@ -126,12 +161,24 @@ $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
         slotMinTime: openTime,
         slotMaxTime: closeTime,
         selectable: true,
-        events: reservations,
-        select: async function (info) {
+        events: async function(info, successCallback, failureCallback) {
+          try {
+            const data = await fetchCourtReservations(selectedCourtId);
+            successCallback(data.reservations);
+          } catch (err) {
+            failureCallback(err);
+          }
+        },
+        select: async function(info) {
           if (confirm(`Mark ${info.startStr} as NOT AVAILABLE?`)) {
             const courtId = selectedCourtId;
             const date = info.startStr.split("T")[0];
             const time = info.startStr.split("T")[1].slice(0, 5); // HH:MM
+
+            // Calculate end time = start + 1 hour
+            const [hour, minute] = time.split(':').map(Number);
+            const endHour = hour + 1;
+            const endTime = `${endHour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
 
             const response = await fetch('api/get_court_reservations.php', {
               method: 'POST',
@@ -140,21 +187,22 @@ $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 court_id: courtId,
                 date: date,
                 time: time,
+                end_time: endTime,   // new field to pass end time
                 section_number: 9,
-                is_admin_set: 1 // New
+                is_admin_set: 1
               })
             });
 
             const result = await response.json();
             if (result.success) {
               alert("Marked as not available!");
-              const events = await fetchCourtReservations(courtId);
-              renderAdminCalendar(events);
+              renderAdminCalendar();
             } else {
               alert("Failed to save.");
             }
           }
         },
+
         eventClick: function(info) {
           if (confirm(`Delete this reservation on ${info.event.start.toLocaleString()}?`)) {
             deleteReservation(info.event.id);
@@ -172,6 +220,14 @@ $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
           } else {
             markBtn.classList.add('hidden');
           }
+        },
+        datesSet: function(info) {
+          const currentDate = info.view.currentStart.toLocaleDateString('en-CA', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          });
+          console.log("Currently viewed day:", currentDate);
         }
       });
       adminCalendar.render();
@@ -186,8 +242,8 @@ $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
       const result = await res.json();
       if (result.success) {
         alert('Reservation deleted.');
-        const events = await fetchCourtReservations(selectedCourtId);
-        renderAdminCalendar(events);
+        //const events = await fetchCourtReservations(selectedCourtId);
+        renderAdminCalendar();//(events);
       } else {
         alert('Failed to delete reservation.');
       }
@@ -205,7 +261,12 @@ $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
       if (!selectedCourtId || !adminCalendar) return;
 
       //const currentDate = adminCalendar.getDate().toISOString().split('T')[0];
-      const currentDate = adminCalendar.view.currentStart.toISOString().split('T')[0];
+      //const currentDate = adminCalendar.view.currentStart.toISOString().split('T')[0];
+      const currentDate = adminCalendar.view.currentStart.toLocaleDateString('en-CA', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          });
       if (!confirm(`Mark entire ${currentDate} as closed?`)) return;
 
       // Fetch court open/close time
@@ -221,25 +282,22 @@ $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
       const startHour = parseInt(open_time.split(':')[0]);
       const endHour = parseInt(close_time.split(':')[0]);
 
-      const timeBlocks = [];
+      const timeList = [];
       for (let h = startHour; h < endHour; h++) {
-        timeBlocks.push(`${h.toString().padStart(2, '0')}:00`);
+        timeList.push(`${h.toString().padStart(2, '0')}:00`);
       }
 
-      // Send multiple reservations (1 hour each block, is_admin_set = 1)
-      for (const time of timeBlocks) {
-        await fetch('api/get_court_reservations.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            court_id: selectedCourtId,
-            date: currentDate,
-            time: time,
-            is_admin_set: 1,
-            section_number: 9
-          })
-        });
-      }
+      await fetch('api/get_court_reservations.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          court_id: selectedCourtId,
+          date: currentDate,
+          time: timeList.join(','), // e.g. "08:00,09:00,10:00"
+          is_admin_set: 1,
+          section_number: 9
+        })
+      });
 
       alert(`Marked ${currentDate} as unavailable.`);
       adminCalendar.refetchEvents(); // Refresh calendar

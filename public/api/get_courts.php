@@ -11,10 +11,21 @@ if (!isset($_GET['sport']) || empty($_GET['sport'])) {
 
 $sport = $_GET['sport'];
 
-// Assuming you have a "sport" column in courts table.
-// If not, you need to add it or map courts to sports elsewhere.
+$stmt = $pdo->prepare("
+    SELECT 
+        courts.id, 
+        courts.name, 
+        courts.location, 
+        courts.open_time, 
+        courts.close_time, 
+        courts.price, 
+        courts.image_path,
+        users.contact_number
+    FROM courts
+    LEFT JOIN users ON courts.owner_id = users.id
+    WHERE courts.type = ?
+");
 
-$stmt = $pdo->prepare("SELECT id, name, location, open_time, close_time, price, image_path FROM courts WHERE type = ?");
 $stmt->execute([$sport]);
 $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

@@ -4,7 +4,7 @@ header('Content-Type: application/json');
 require_once '../includes/db.php';
 
 // Check if admin is logged in
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] == 'user') {
     http_response_code(403);
     echo json_encode(['error' => 'Access denied']);
     exit();
@@ -28,8 +28,16 @@ if ($method === 'POST' && isset($data['court_id']) && !isset($data['date'], $dat
 
     $court_name = $court['name'];
 
-    // Fetch reservations
-    $stmt = $pdo->prepare("SELECT id, date, time, section_number, is_admin_set FROM reservations WHERE court = ? ORDER BY date, time");
+    // Fetch reservations joined with reservation_slots for time slots
+    $stmt = $pdo->prepare("
+        SELECT r.id, r.date, r.section_number, r.is_admin_set, 
+               GROUP_CONCAT(DISTINCT rs.time ORDER BY rs.time) AS time_slots
+        FROM reservations r
+        LEFT JOIN reservation_slots rs ON rs.reservation_id = r.id
+        WHERE r.court = ?
+        GROUP BY r.id, rs.section_number
+        ORDER BY r.date
+    ");
     $stmt->execute([$court_name]);
     $reservations = $stmt->fetchAll();
 
@@ -66,9 +74,19 @@ if ($method === 'POST' && isset($data['court_id']) && !isset($data['date'], $dat
     $court_name = $court['name'];
 
     // Save reservation or admin-availability block
-    $stmt = $pdo->prepare("INSERT INTO reservations (user_id, court, date, time, section_number, is_admin_set)
-                           VALUES (?, ?, ?, ?, ?, ?)");
-    $saved = $stmt->execute([$_SESSION['user_id'], $court_name, $date, $time, $section, $is_admin_set]);
+    $stmt = $pdo->prepare("INSERT INTO reservations (user_id, court, date, section_number, is_admin_set)
+                       VALUES (?, ?, ?, ?, ?)");
+    $saved = $stmt->execute([$_SESSION['user_id'], $court_name, $date, $section, $is_admin_set]);
+
+    if ($saved) {
+        $reservation_id = $pdo->lastInsertId();
+        // Insert each time slot into reservation_slots
+        $times = explode(',', $time);
+        $stmtSlot = $pdo->prepare("INSERT INTO reservation_slots (reservation_id, time) VALUES (?, ?)");
+        foreach ($times as $t) {
+            $stmtSlot->execute([$reservation_id, $t]);
+        }
+    }
 
     echo json_encode(['success' => $saved]);
     exit();
@@ -92,15 +110,44 @@ if ($method === 'POST' && isset($data['court_id']) && !isset($data['date'], $dat
         exit();
     }
 
-    // Update reservation
-    $stmt = $pdo->prepare("UPDATE reservations SET date = ?, time = ?, section_number = ? WHERE id = ?");
-    $success = $stmt->execute([$date, $time, $section_number, $reservation_id]);
+    // Begin transaction to keep updates consistent
+    $pdo->beginTransaction();
 
-    if ($success) {
+    try {
+        // Update reservation date and section_number
+        $stmt = $pdo->prepare("UPDATE reservations SET date = ?, section_number = ? WHERE id = ?");
+        $stmt->execute([$date, $section_number, $reservation_id]);
+
+        // Delete old reservation_slots for this reservation
+        $stmtDel = $pdo->prepare("DELETE FROM reservation_slots WHERE reservation_id = ?");
+        $stmtDel->execute([$reservation_id]);
+
+        // Insert new time slots
+        $stmtSlot = $pdo->prepare("INSERT INTO reservation_slots (reservation_id, time) VALUES (?, ?)");
+
+        // Support time either as comma-separated string or array
+        if (is_string($time)) {
+            $times = explode(',', $time);
+        } elseif (is_array($time)) {
+            $times = $time;
+        } else {
+            $times = [];
+        }
+
+        foreach ($times as $t) {
+            $trimmed = trim($t);
+            if ($trimmed !== '') {
+                $stmtSlot->execute([$reservation_id, $trimmed]);
+            }
+        }
+
+        $pdo->commit();
+
         echo json_encode(['success' => true]);
-    } else {
+    } catch (Exception $e) {
+        $pdo->rollBack();
         http_response_code(500);
-        echo json_encode(['error' => 'Failed to update reservation']);
+        echo json_encode(['error' => 'Failed to update reservation: ' . $e->getMessage()]);
     }
 
     exit();
@@ -121,17 +168,26 @@ elseif ($method === 'DELETE') {
         exit();
     }
 
-    // Delete reservation
-    $stmt = $pdo->prepare("DELETE FROM reservations WHERE id = ?");
-    $deleted = $stmt->execute([$reservation_id]);
+    // Begin transaction for consistency
+    $pdo->beginTransaction();
 
-    if ($deleted) {
+    try {
+        // Delete reservation_slots first
+        $stmtSlots = $pdo->prepare("DELETE FROM reservation_slots WHERE reservation_id = ?");
+        $stmtSlots->execute([$reservation_id]);
+
+        // Delete reservation
+        $stmt = $pdo->prepare("DELETE FROM reservations WHERE id = ?");
+        $stmt->execute([$reservation_id]);
+
+        $pdo->commit();
+
         echo json_encode(['success' => true]);
-    } else {
+    } catch (Exception $e) {
+        $pdo->rollBack();
         http_response_code(500);
-        echo json_encode(['error' => 'Failed to delete reservation']);
+        echo json_encode(['error' => 'Failed to delete reservation: ' . $e->getMessage()]);
     }
-
     exit();
 }
 

@@ -8,6 +8,7 @@ $parts = explode("@", $email);
 $name = $parts[0];
 $password = $_POST['password'];
 $contact = $_POST['contact_number'];
+$user_type = $_POST['user_type'] ?? 'user';
 
 if (!$full_name || !$email || !$password || !$name || !$contact) {
   die("Missing fields.");
@@ -26,8 +27,8 @@ if ($stmt->rowCount() > 0) {
 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
 // Insert new user
-$stmt = $pdo->prepare("INSERT INTO users (name, full_name, email, contact_number, password_hash) VALUES (?, ?, ?, ?, ?)");
-$success = $stmt->execute([$name, $full_name, $email, $contact, $hashed_password]);
+$stmt = $pdo->prepare("INSERT INTO users (name, full_name, email, role, contact_number, password_hash) VALUES (?, ?, ?, ?, ?, ?)");
+$success = $stmt->execute([$name, $full_name, $email, $user_type, $contact, $hashed_password]);
 
 if ($success) {
   // Optionally auto-login the user

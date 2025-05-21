@@ -36,10 +36,20 @@
 </head>
 <body class="bg-gray-800 flex items-center justify-center min-h-screen">
 
+    <!-- User Type Selection Modal -->
+  <div id="user-type-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white p-8 rounded shadow-lg text-center w-80">
+      <h2 class="text-xl font-bold mb-4">Sign up as:</h2>
+      <button onclick="selectUserType('user')" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full mb-2">User</button>
+      <button onclick="selectUserType('owner')" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded w-full">Owner</button>
+    </div>
+  </div>
+
   <div class="bg-gray-600 p-8 rounded-xl shadow-md w-full max-w-md">
     <h1 class="text-2xl font-bold mb-6 text-center text-orange-600">Create Your Account</h1>
 
     <form action="../api/register.php" method="POST" onsubmit="validateForm(event)" class="space-y-4">
+      <input type="hidden" name="user_type" id="user_type" value="" />
       <div>
         <label class="block text-sm font-medium text-white">Full Name</label>
         <input type="text" name="name" required
@@ -84,5 +94,12 @@
     </p>
   </div>
 
+  <script>
+    function selectUserType(type) {
+      document.getElementById('user_type').value = type;
+      document.getElementById('user-type-modal').classList.add('hidden');
+      document.getElementById('registration-form').classList.remove('hidden');
+    }
+  </script>
 </body>
 </html>

@@ -3,12 +3,22 @@ session_start();
 require_once "includes/db.php";
 
 // Redirect if not admin
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
-  header("Location: index.html");
-  exit();
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] === 'user') {
+    echo $_SESSION['role'];
+    header("Location: ../index.html");
+    exit;
 }
 
-$stmt = $pdo->query("SELECT * FROM courts");
+$user_type = $_SESSION['role'];
+$user_id = $_SESSION['user_id'];
+
+if ($user_type === 'admin') {
+    $stmt = $pdo->prepare("SELECT * FROM courts");
+    $stmt->execute();
+} else if ($user_type === 'owner') {
+    $stmt = $pdo->prepare("SELECT * FROM courts WHERE owner_id = ?");
+    $stmt->execute([$user_id]);
+}
 $courts = $stmt->fetchAll();
 ?>
 

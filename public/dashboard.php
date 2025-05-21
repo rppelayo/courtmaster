@@ -4,6 +4,9 @@ if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_name'])) {
   header("Location: index.html");
   exit;
 }
+
+include 'chatbox.php'; 
+
 $user_name = htmlspecialchars($_SESSION['user_name']);
 ?>
 
@@ -58,7 +61,7 @@ $user_name = htmlspecialchars($_SESSION['user_name']);
       fetch('api/my_reservations.php')
         .then(res => res.json())
         .then(data => {
-
+          console.log(data);   
           const list = document.getElementById('reservation-list');
           list.innerHTML = '';
 
@@ -79,10 +82,26 @@ $user_name = htmlspecialchars($_SESSION['user_name']);
           data.forEach(r => {
             const icon = sportIcons[r.sport] || sportIcons.Default;
             const li = document.createElement('li');
+            const formatTo12Hour = (timeStr) => {
+                const [hour, minute] = timeStr.split(":").map(Number);
+                const ampm = hour >= 12 ? "PM" : "AM";
+                const formattedHour = (hour % 12 || 12).toString();
+                return `${formattedHour}:${minute.toString().padStart(2, "0")} ${ampm}`;
+            };
+
+            const timeArray = typeof r.time === "string" ? r.time.split(",") : [];
+            let time_str = ""
+            if (timeArray.length > 0) {
+                const startTime = formatTo12Hour(timeArray[0]);
+                const endTime = formatTo12Hour(timeArray[timeArray.length - 1]);
+                time_str = `${startTime} - ${endTime}`;
+            } else {
+                time_str= "N/A";
+            }
             li.className = 'flex justify-between items-center py-2 border-b';
             li.innerHTML = `
               <span>${icon} <strong>${r.sport}</strong> at <strong>${r.court}</strong><br>
-                <small>${r.date} at ${r.time}</small></span>
+                <small>${r.date} at ${time_str}</small></span>
               <button onclick="cancelReservation(${r.id})"
                       class="text-red-500 hover:underline text-sm">Cancel</button>
             `;

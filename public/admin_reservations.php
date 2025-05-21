@@ -3,12 +3,34 @@ session_start();
 require_once "includes/db.php";
 
 // Redirect if not admin
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
-  header("Location: index.html");
-  exit();
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] === 'user') {
+    header("Location: ../index.html");
+    exit;
 }
 
-$stmt = $pdo->query("SELECT * FROM reservations ORDER BY created_at DESC");
+$owner_id = $_SESSION['user_id'];
+if ($_SESSION['role'] === 'owner') {
+    $stmt = $pdo->prepare("
+        SELECT r.*, GROUP_CONCAT(DISTINCT rs.time ORDER BY rs.time) AS time_slots
+        FROM reservations r
+        JOIN courts c ON r.court_id = c.id
+        LEFT JOIN reservation_slots rs ON rs.reservation_id = r.id
+        WHERE c.owner_id = ?
+        GROUP BY r.id
+        ORDER BY r.date;
+    ");
+    $stmt->execute([$owner_id]);
+} else {
+    $stmt = $pdo->query("
+        SELECT r.*, GROUP_CONCAT(DISTINCT rs.time ORDER BY rs.time) AS time_slots
+        FROM reservations r
+        LEFT JOIN reservation_slots rs ON rs.reservation_id = r.id
+        GROUP BY r.id
+        ORDER BY r.created_at;
+    ");
+}
+
+
 $reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
@@ -97,7 +119,7 @@ $reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);
           <td class="border px-3 py-2"><?= htmlspecialchars($r['court']) ?></td>
           <td class="border px-3 py-2"><?= htmlspecialchars($r['section_number'] == 0 ? "All" : $r['section_number']) ?></td>
           <td class="border px-3 py-2"><?= htmlspecialchars($r['date']) ?></td>
-          <td class="border px-3 py-2"><?= htmlspecialchars($r['time']) ?></td>
+          <td class="border px-3 py-2"><?= htmlspecialchars($r['time_slots'] ?? '') ?></td>
           <td class="border px-3 py-2">
             <span class="inline-block px-2 py-1 rounded text-sm 
               <?= $r['payment_status'] === 'paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700' ?>">

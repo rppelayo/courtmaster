@@ -4,7 +4,7 @@ require_once "../includes/db.php";
 
 header("Content-Type: application/json");
 
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] == 'user') {
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
     exit;
 }
@@ -13,6 +13,7 @@ $id = $_POST['id'] ?? '';
 $name = $_POST['name'] ?? '';
 $location = $_POST['location'] ?? '';
 $price = $_POST['price'] ?? '';
+$owner_id = $_SESSION['user_id'];
 $type = $_POST['type'] ?? '';
 $open_time = $_POST['open_hour'] ?? '';
 $close_time = $_POST['close_hour'] ?? '';
@@ -40,8 +41,8 @@ try {
         $stmt->execute($params);
     } else {
         // Insert new
-        $stmt = $pdo->prepare("INSERT INTO courts (name, location, price, open_time, close_time, type, image_path) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$name, $location, $price, $open_time, $close_time, $type, $imagePath]);
+        $stmt = $pdo->prepare("INSERT INTO courts (name, location, price, owner_id, open_time, close_time, type, image_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$name, $location, $price, $owner_id, $open_time, $close_time, $type, $imagePath]);
     }
 
     echo json_encode(['success' => true]);
