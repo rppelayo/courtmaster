@@ -12,12 +12,24 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] === 'user') {
 $user_type = $_SESSION['role'];
 $user_id = $_SESSION['user_id'];
 
+$filter_sport = $_GET['filter_sport'] ?? '';
+
 if ($user_type === 'admin') {
-    $stmt = $pdo->prepare("SELECT * FROM courts");
-    $stmt->execute();
+    if (!empty($filter_sport)) {
+        $stmt = $pdo->prepare("SELECT * FROM courts WHERE type = ?");
+        $stmt->execute([$filter_sport]);
+    } else {
+        $stmt = $pdo->prepare("SELECT * FROM courts");
+        $stmt->execute();
+    }
 } else if ($user_type === 'owner') {
-    $stmt = $pdo->prepare("SELECT * FROM courts WHERE owner_id = ?");
-    $stmt->execute([$user_id]);
+    if (!empty($filter_sport)) {
+        $stmt = $pdo->prepare("SELECT * FROM courts WHERE owner_id = ? AND type = ?");
+        $stmt->execute([$user_id, $filter_sport]);
+    } else {
+        $stmt = $pdo->prepare("SELECT * FROM courts WHERE owner_id = ?");
+        $stmt->execute([$user_id]);
+    }
 }
 $courts = $stmt->fetchAll();
 
@@ -36,6 +48,17 @@ $courts = $stmt->fetchAll();
     <h1 class="text-2xl text-orange-600 font-bold mb-4">Court Management</h1>
 
     <button onclick="openCourtModal()" class="bg-orange-600 text-white px-4 py-2 mb-4 rounded">Add New Court</button>
+    <form method="GET" class="mb-4 flex items-center space-x-2">
+      <label for="filter_sport" class="font-medium">Filter by Sport:</label>
+      <select name="filter_sport" id="filter_sport" class="border px-2 py-1 rounded">
+        <option value="">All</option>
+        <option value="basketball" <?= ($_GET['filter_sport'] ?? '') == 'basketball' ? 'selected' : '' ?>>Basketball/Volleyball</option>
+        <option value="tennis" <?= ($_GET['filter_sport'] ?? '') == 'tennis' ? 'selected' : '' ?>>Tennis</option>
+        <option value="swimming" <?= ($_GET['filter_sport'] ?? '') == 'swimming' ? 'selected' : '' ?>>Swimming</option>
+        <option value="badminton" <?= ($_GET['filter_sport'] ?? '') == 'badminton' ? 'selected' : '' ?>>Badminton</option>
+      </select>
+      <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded">Apply</button>
+    </form>
 
     <table class="min-w-full bg-white border">
       <thead class="bg-gray-800 text-white">

@@ -34,7 +34,12 @@ if ($success) {
   // Optionally auto-login the user
   $_SESSION['user_id'] = $pdo->lastInsertId();
   $_SESSION['user_name'] = $name;
-  header("Location: ../dashboard.php");
+  if($user_type === 'user') {
+      header("Location: ../dashboard.php");
+  }else{
+       header("Location: ../admin_dashboard.php");
+  }
+  
   exit;
 } else {
   echo "Registration failed.";

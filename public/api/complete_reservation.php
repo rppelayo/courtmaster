@@ -5,10 +5,16 @@ header('Content-Type: application/json');
 
 require_once '../includes/db.php';
 
+// Load Composer's autoloader
+//require '/home/olanpelayo0788/vendor/autoload.php'; // Adjust if needed
+    
+//use PHPMailer\PHPMailer\PHPMailer;
+//use PHPMailer\PHPMailer\Exception;
+
 $data = json_decode(file_get_contents('php://input'), true);
 
 // Ensure all required fields are provided
-if (!isset($data['fullName'], $data['contactNumber'], $data['email'], $data['paymentMethod'], $data['sport'], $data['court'], $data['court_id'], $data['section'], $data['date'], $data['time'])) {
+if (!isset($data['fullName'], $data['contactNumber'], $data['email'], $data['paymentMethod'], $data['sport'], $data['court'], $data['court_id'], $data['section'], $data['date'], $data['time'], $data['payment'])) {
     echo json_encode(['success' => false, 'message' => 'Incomplete data']);
     exit;
 }
@@ -24,6 +30,7 @@ $sport = $data['sport'];
 $court = $data['court'];
 $court_id = $data['court_id'];
 $section = $data['section'];
+$payment = $data['payment'];
 $date = $data['date'];
 $timeSlots = $data['time']; // Could be string or array
 
@@ -64,9 +71,9 @@ try {
 
     foreach ($section as $sec) {
         // Insert reservation for this section number
-        $stmt = $pdo->prepare("INSERT INTO reservations (user_id, full_name, contact_number, email, reservation_info, payment_method, sport, court, court_id, section_number, date)
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$user_id, $fullName, $contactNumber, $email, $reservationInfo, $paymentMethod, $sport, $court, $court_id, $sec, $date]);
+        $stmt = $pdo->prepare("INSERT INTO reservations (user_id, full_name, contact_number, email, reservation_info, payment_method, sport, court, court_id, section_number, date, payment)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$user_id, $fullName, $contactNumber, $email, $reservationInfo, $paymentMethod, $sport, $court, $court_id, $sec, $date, $payment]);
 
         $reservation_id = $pdo->lastInsertId();
         $reservation_ids[] = $reservation_id;
@@ -80,10 +87,10 @@ try {
 
     // Handle guest_reservations for all reservation ids
     if (!$user_id) {
-        $guest_stmt = $pdo->prepare("INSERT INTO reservation_guests (reservation_id, guest_name, guest_contact)
-                                     VALUES (?, ?, ?)");
+        $guest_stmt = $pdo->prepare("INSERT INTO reservation_guests (reservation_id, guest_name, guest_contact, payment)
+                                     VALUES (?, ?, ?, ?)");
         foreach ($reservation_ids as $rid) {
-            $guest_stmt->execute([$rid, $fullName, $contactNumber]);
+            $guest_stmt->execute([$rid, $fullName, $contactNumber, $payment]);
         }
     }
 
@@ -113,7 +120,7 @@ try {
             <li><strong>Time Slots:</strong> {$timesListHtml}</li>
             <li><strong>Payment Method:</strong> {$paymentMethod}</li>
             <li><strong>Additional Info:</strong> {$reservationInfo}</li>
-            <li><strong>Fee:</strong> P250.00</li>
+            <li><strong>Fee:</strong> {$payment}</li>
         </ul>
         <p>If you have any questions, reply to this email.</p>
         <br/>
@@ -122,14 +129,38 @@ try {
     </html>
     ";
 
-    $headers  = "MIME-Version: 1.0" . "\r\n";
-    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-    $headers .= "From: CourtMaster <no-reply@courtmaster.online>" . "\r\n";
+ 
+    
+   /*  $mail = new PHPMailer(true);
+    
+    try {
+        // Server settings
+        $mail->isSMTP();
+        $mail->Host = 'mail.courtmaster.online'; // GoDaddy SMTP
+        $mail->SMTPAuth = true;
+        $mail->Username = 'no-reply@courtmaster.online';
+        $mail->Password = 'd=+P$tJwoLx2'; // Replace securely
+        $mail->SMTPSecure = 'ssl';
+        $mail->Port = 465;
+    
+        // Recipients
+        $mail->setFrom('no-reply@courtmaster.online', 'CourtMaster');
+        $mail->addAddress($to, $fullName);
+    
+        // Content
+        $mail->isHTML(true);
+        $mail->Subject = $subject;
+        $mail->Body = $message;
+    
+        $mail->send();
+        echo json_encode(['success' => true, 'to' => $to]);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'error' => 'Mailer Error: ' . $mail->ErrorInfo]);
+    }
 
-    // Send the email
-    // mail($to, $subject, $message, $headers);
-
-    echo json_encode(['success' => true]);
+ */
+echo json_encode(['success' => true, 'to' => $to]);
+    
 } catch (PDOException $e) {
     // Rollback on error
     $pdo->rollBack();

@@ -9,7 +9,55 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] === 'user') {
 }
 
 $owner_id = $_SESSION['user_id'];
+$sport_filter = $_GET['sport'] ?? '';
+$params = [];
+$where_clauses = [];
+$joins = "LEFT JOIN reservation_slots rs ON rs.reservation_id = r.id";
+
 if ($_SESSION['role'] === 'owner') {
+    $joins = "JOIN courts c ON r.court_id = c.id
+              LEFT JOIN reservation_slots rs ON rs.reservation_id = r.id";
+    $where_clauses[] = "c.owner_id = ?";
+    $params[] = $owner_id;
+
+    if (!empty($sport_filter)) {
+        $where_clauses[] = "c.type = ?";
+        $params[] = $sport_filter;
+    }
+} else {
+    // role is admin
+    if (!empty($sport_filter)) {
+        $joins = "JOIN courts c ON r.court_id = c.id
+                  LEFT JOIN reservation_slots rs ON rs.reservation_id = r.id";
+        $where_clauses[] = "c.type = ?";
+        $params[] = $sport_filter;
+    }
+    // else: no need to join courts
+}
+
+// Build the WHERE clause
+$where_sql = '';
+if (!empty($where_clauses)) {
+    $where_sql = "WHERE " . implode(" AND ", $where_clauses);
+}
+
+$select_c_type = strpos($joins, 'courts c') !== false ? ", c.type AS sport" : "";
+
+$sql = "
+    SELECT r.* $select_c_type, GROUP_CONCAT(DISTINCT rs.time ORDER BY rs.time) AS time_slots
+    FROM reservations r
+    $joins
+    $where_sql
+    GROUP BY r.id
+    ORDER BY r.created_at;
+";
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
+$reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+
+/* if ($_SESSION['role'] === 'owner') {
     $stmt = $pdo->prepare("
         SELECT r.*, GROUP_CONCAT(DISTINCT rs.time ORDER BY rs.time) AS time_slots
         FROM reservations r
@@ -28,10 +76,10 @@ if ($_SESSION['role'] === 'owner') {
         GROUP BY r.id
         ORDER BY r.created_at;
     ");
-}
+} */
 
 
-$reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+//$reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <!DOCTYPE html>
@@ -96,6 +144,19 @@ $reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 <div class="p-6">
 <h1 class="text-2xl text-orange-600 font-bold mb-4">All Reservations</h1>
+<form method="get" class="mb-4">
+  <label for="sport" class="text-sm font-semibold">Filter by Sport:</label>
+  <select name="sport" id="sport" onchange="this.form.submit()" class="border px-2 py-1 rounded">
+    <option value="">All Sports</option>
+    <?php
+      $sports = $pdo->query("SELECT DISTINCT type FROM courts ORDER BY type")->fetchAll(PDO::FETCH_COLUMN);
+      foreach ($sports as $sport) {
+          $selected = ($sport === $sport_filter) ? 'selected' : '';
+          echo "<option value=\"$sport\" $selected>" . htmlspecialchars(ucfirst($sport)) . "</option>";
+      }
+    ?>
+  </select>
+</form>
 
     <table class="w-full border border-gray-300">
       <thead class="bg-gray-800 text-white">

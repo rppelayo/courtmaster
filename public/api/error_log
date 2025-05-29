@@ -9,3 +9,22 @@ Stack trace:
 #1 {main}
   thrown in /home/olanpelayo0788/public_html/courtmaster.online/public/api/register.php on line 29
 [17-May-2025 03:53:28 UTC] PHP Warning:  Undefined array key "contact" in /home/olanpelayo0788/public_html/courtmaster.online/public/api/register.php on line 10
+[21-May-2025 03:01:41 UTC] PHP Fatal error:  Uncaught TypeError: count(): Argument #1 ($value) must be of type Countable|array, int given in /home/olanpelayo0788/public_html/courtmaster.online/public/api/complete_reservation.php:54
+Stack trace:
+#0 {main}
+  thrown in /home/olanpelayo0788/public_html/courtmaster.online/public/api/complete_reservation.php on line 54
+[21-May-2025 05:33:28 UTC] PHP Warning:  require(/home/olanpelayo0788/public_html/courtmaster.online/public/api/../../../vendor/autoload.php): Failed to open stream: No such file or directory in /home/olanpelayo0788/public_html/courtmaster.online/public/api/complete_reservation.php on line 9
+[21-May-2025 05:33:28 UTC] PHP Fatal error:  Uncaught Error: Failed opening required '/home/olanpelayo0788/public_html/courtmaster.online/public/api/../../../vendor/autoload.php' (include_path='.:/opt/alt/php81/usr/share/pear:/opt/alt/php81/usr/share/php:/usr/share/pear:/usr/share/php') in /home/olanpelayo0788/public_html/courtmaster.online/public/api/complete_reservation.php:9
+Stack trace:
+#0 {main}
+  thrown in /home/olanpelayo0788/public_html/courtmaster.online/public/api/complete_reservation.php on line 9
+[21-May-2025 05:33:54 UTC] PHP Warning:  require(/home/olanpelayo0788/public_html/courtmaster.online/public/api/../../../vendor/autoload.php): Failed to open stream: No such file or directory in /home/olanpelayo0788/public_html/courtmaster.online/public/api/complete_reservation.php on line 9
+[21-May-2025 05:33:54 UTC] PHP Fatal error:  Uncaught Error: Failed opening required '/home/olanpelayo0788/public_html/courtmaster.online/public/api/../../../vendor/autoload.php' (include_path='.:/opt/alt/php81/usr/share/pear:/opt/alt/php81/usr/share/php:/usr/share/pear:/usr/share/php') in /home/olanpelayo0788/public_html/courtmaster.online/public/api/complete_reservation.php:9
+Stack trace:
+#0 {main}
+  thrown in /home/olanpelayo0788/public_html/courtmaster.online/public/api/complete_reservation.php on line 9
+[21-May-2025 05:35:39 UTC] PHP Warning:  require(/home/olanpelayo0788/public_html/courtmaster.online/public/api/home/olanpelayo0788/vendor/autoload.php): Failed to open stream: No such file or directory in /home/olanpelayo0788/public_html/courtmaster.online/public/api/complete_reservation.php on line 9
+[21-May-2025 05:35:39 UTC] PHP Fatal error:  Uncaught Error: Failed opening required '/home/olanpelayo0788/public_html/courtmaster.online/public/api/home/olanpelayo0788/vendor/autoload.php' (include_path='.:/opt/alt/php81/usr/share/pear:/opt/alt/php81/usr/share/php:/usr/share/pear:/usr/share/php') in /home/olanpelayo0788/public_html/courtmaster.online/public/api/complete_reservation.php:9
+Stack trace:
+#0 {main}
+  thrown in /home/olanpelayo0788/public_html/courtmaster.online/public/api/complete_reservation.php on line 9

@@ -59,7 +59,7 @@ session_start();
             Cash On-site
           </label>
           <label class="mx-6 text-white ">
-            <input type="radio" name="payment-method" value="credit-card" class="mr-2" required />
+            <input type="radio" name="payment-method" value="credit-card" class="mr-2" />
             Credit Card
           </label>
           <label class="mx-6 text-white ">
@@ -71,9 +71,11 @@ session_start();
             Bank Transfer
           </label>
         </div>
+
+        </div>
       </div>
 
-      <div class="flex justify-between">
+      <div class="flex justify-center gap-4">
         <button type="button" onclick="window.history.back()" class="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400">
           Back
         </button>
@@ -95,16 +97,25 @@ session_start();
       const time = new URLSearchParams(window.location.search).get('time');
       const fee =  new URLSearchParams(window.location.search).get('fee');
       let email = new URLSearchParams(window.location.search).get('email');
+      let sessionEmail = "<?php echo isset($_SESSION['user_id']) ? $_SESSION['email'] : ''; ?>";
+      let emailInput = document.getElementById("email");
       
       document.getElementById("sport-info").textContent = `Sport: ${sport}`;
       document.getElementById("court-info").textContent = `Court: ${court}`;
-      document.getElementById("section-info").textContent = `Section: ${section ==  0 ? "All" : section}`;
+      let uniqueSections = section == 0 
+          ? ["All"] 
+          : [...new Set(section.split(',').map(s => s.trim()))];
+        
+      document.getElementById("section-info").textContent = `Section: ${uniqueSections.join(', ')}`;
+
       document.getElementById("date-info").textContent = `Date: ${date}`;
-      //document.getElementById("time-info").textContent = `Time: ${time}`;
-      document.getElementById("email").value = "<?php echo  $_SESSION['email'] ?>";
-
-      email = "<?php echo  $_SESSION['email'] ?>";
-
+      
+      if (sessionEmail) {
+          emailInput.value = sessionEmail;
+      } else if (email) {
+          emailInput.value = email;
+      }
+      
       const formatTo12Hour = (timeStr) => {
           const [hour, minute] = timeStr.split(":").map(Number);
           const ampm = hour >= 12 ? "PM" : "AM";
@@ -116,13 +127,14 @@ session_start();
 
       if (timeArray.length > 0) {
           const startTime = formatTo12Hour(timeArray[0]);
-          const endTime = formatTo12Hour(timeArray[timeArray.length - 1]);
+          let [endHour, endMinute] = timeArray[timeArray.length - 1].split(":").map(Number);
+          endHour += 1;
+          if (endHour === 24) endHour = 0; // handle wrap-around if needed
+          const endTime = formatTo12Hour(`${endHour}:${endMinute}`);
           document.getElementById("time-info").textContent = `Time: ${startTime} - ${endTime}`;
       } else {
           document.getElementById("time-info").textContent = "Time: N/A";
       }
-
-
 
 
       // Assuming the fee is constant for now, adjust as needed.
@@ -135,9 +147,11 @@ session_start();
         const contactNumber = document.getElementById("contact-number").value;
         const reservationInfo = document.getElementById("reservation-notes").value;
         const paymentMethod = document.querySelector('input[name="payment-method"]:checked').value;
+        let email = document.getElementById("email").value;
+        let payment = fee;
 
         if(!section) 
-          section = 1;
+          section = 0
 
         const res = await fetch("api/complete_reservation.php", {
           method: "POST",
@@ -153,7 +167,8 @@ session_start();
             court_id,
             section,
             date,
-            time
+            time,
+            payment
           })
         });
 
@@ -161,9 +176,33 @@ session_start();
         if (result.success) {
           document.getElementById("splash-sport").textContent = sport;
           document.getElementById("splash-court").textContent = court;
-          document.getElementById("splash-section").textContent = section == 0 ? "All" : section;
+          let uniqueSections = section == 0 
+              ? ["All"] 
+              : [...new Set(section.split(',').map(s => s.trim()))];
+            
+          document.getElementById("section-info").textContent = `Section: ${uniqueSections.join(', ')}`;
+
           document.getElementById("splash-date").textContent = date;
-          document.getElementById("splash-time").textContent = time;
+          //document.getElementById("splash-time").textContent = time;
+          const formatTo12Hour = (timeStr) => {
+              const [hour, minute] = timeStr.split(":").map(Number);
+              const ampm = hour >= 12 ? "PM" : "AM";
+              const formattedHour = (hour % 12 || 12).toString();
+              return `${formattedHour}:${minute.toString().padStart(2, "0")} ${ampm}`;
+          };
+    
+          const timeArray = typeof time === "string" ? time.split(",") : [];
+    
+          if (timeArray.length > 0) {
+              const startTime = formatTo12Hour(timeArray[0]);
+              let [endHour, endMinute] = timeArray[timeArray.length - 1].split(":").map(Number);
+              endHour += 1;
+              if (endHour === 24) endHour = 0; // handle wrap-around if needed
+              const endTime = formatTo12Hour(`${endHour}:${endMinute}`);
+              document.getElementById("splash-time").textContent = `Time: ${startTime} - ${endTime}`;
+          } else {
+              document.getElementById("splash-time").textContent = "Time: N/A";
+          }
           document.getElementById("splash-name").textContent = fullName;
           document.getElementById("splash-contact").textContent = contactNumber;
           document.getElementById("splash-payment").textContent = paymentMethod;

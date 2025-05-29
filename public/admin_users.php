@@ -9,10 +9,17 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] === 'user') {
 require_once 'includes/db.php';
 
 //$users = $pdo->query("SELECT id, name, full_name, email, contact_number, role FROM users where id !=?")->fetchAll(PDO::FETCH_ASSOC);
+$filter_role = $_GET['filter_role'] ?? '';
 $current_admin_id = $_SESSION['user_id'];
 
-$stmt = $pdo->prepare("SELECT * FROM users WHERE id != ?");
-$stmt->execute([$current_admin_id]);
+if (!empty($filter_role)) {
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE id != ? AND role = ?");
+    $stmt->execute([$current_admin_id, $filter_role]);
+} else {
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE id != ?");
+    $stmt->execute([$current_admin_id]);
+}
+
 $users = $stmt->fetchAll();
 ?>
 <!DOCTYPE html>
@@ -25,6 +32,14 @@ $users = $stmt->fetchAll();
 </head>
 <body class="bg-gray-100 p-6">
   <h1 class="text-2xl text-orange-600 font-bold mb-4">User Management</h1>
+  <form method="get" class="mb-4">
+    <label for="filter_role" class="mr-2 font-semibold">Filter by Role:</label>
+    <select name="filter_role" id="filter_role" class="border px-2 py-1 rounded" onchange="this.form.submit()">
+      <option value="">All Roles</option>
+      <option value="owner" <?= ($filter_role === 'owner') ? 'selected' : '' ?>>Owner</option>
+      <option value="user" <?= ($filter_role === 'user') ? 'selected' : '' ?>>User</option>
+    </select>
+  </form>
 
   <table class="min-w-full bg-white shadow rounded">
     <thead class="bg-gray-800 text-white">
