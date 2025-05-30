@@ -5,11 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>News Feed – CourtMaster</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .tag-button {
+      padding: 0.25rem 0.75rem;
+      background-color: #4b5563;
+      color: white;
+      border-radius: 9999px;
+      transition: background-color 0.2s;
+    }
+    .tag-button:hover {
+      background-color: #ea580c;
+    }
+    .tag-button.selected {
+      background-color: #c2410c;
+      font-weight: bold;
+    }
+  </style>
+
 </head>
-<body class="bg-gray-800 min-h-screen text-gray-800">
+<body class="bg-gray-900 min-h-screen text-gray-800">
 
   <div class="max-w-2xl mx-auto p-6 mt-8 bg-gray-800 rounded-xl shadow-lg">
     <h1 class="text-2xl font-bold text-orange-600 mb-6 text-center">🏀 CourtMaster News Feed</h1>
+    <select id="sportFilter" onchange="loadFeed()" class="mb-4 p-2 rounded">
+      <option value="">All Sports</option>
+      <option value="Basketball">Basketball</option>
+      <option value="Volleyball">Volleyball</option>
+      <option value="Badminton">Badminton</option>
+      <option value="Tennis">Tennis</option>
+      <option value="Soccer">Soccer</option>
+    </select>
 
     <!-- Post Form -->
     <form id="postForm" class="mb-6">
@@ -17,6 +42,18 @@
         rows="3"
         class="w-full p-3 border rounded-lg resize-none focus:outline-none focus:ring"
         placeholder="What's on your mind?"></textarea>
+        <div class="mt-2">
+          <label class="block text-sm text-white mb-1">Select Sport:</label>
+          <div id="sportTags" class="flex flex-wrap gap-2">
+            <button type="button" data-sport="Basketball" class="tag-button">🏀 Basketball</button>
+            <button type="button" data-sport="Volleyball" class="tag-button">🏐 Volleyball</button>
+            <button type="button" data-sport="Badminton" class="tag-button">🏸 Badminton</button>
+            <button type="button" data-sport="Tennis" class="tag-button">🎾 Tennis</button>
+            <button type="button" data-sport="Soccer" class="tag-button">⚽ Soccer</button>
+          </div>
+          <input type="hidden" id="postSport" />
+        </div>
+
       <button type="submit"
         class="mt-2 bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700 float-right">
         Post
@@ -32,10 +69,17 @@
     document.addEventListener('DOMContentLoaded', loadFeed);
 
     async function loadFeed() {
-      const res = await fetch('../api/newsfeed.php');
+      const sport = document.getElementById('sportFilter').value;
+      const url = sport ? `../api/newsfeed.php?sport=${encodeURIComponent(sport)}` : '../api/newsfeed.php';
+      const res = await fetch(url);
       const posts = await res.json();
       const feed = document.getElementById('feed');
       feed.innerHTML = '';
+
+       if (posts.length === 0) {
+        feed.innerHTML = '<p class="text-white">No posts found for this sport.</p>';
+        return;
+      }
 
       posts.forEach(post => {
         const item = document.createElement('div');
@@ -63,7 +107,7 @@
             <!-- Add comment -->
             <form onsubmit="return commentPost(${post.id}, this)" class="mt-2 flex space-x-2">
                 <input type="text" name="comment" class="flex-1 border rounded px-2 py-1" placeholder="Add a comment..." required />
-                <button type="submit" class="text-white bg-orange-500 px-3 py-1 rounded hover:bg-orange-600">Post</button>
+                <button type="submit" class="text-white bg-orange-500 px-3 py-1 rounded hover:bg-orange-600">Comment</button>
             </form>
             `;
 
@@ -74,12 +118,13 @@
     document.getElementById('postForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       const content = document.getElementById('postContent').value.trim();
-      if (!content) return;
+      const sport = document.getElementById('postSport').value;
+      if (!content || !sport) return alert('Please enter content and select a sport.'); 
 
       const res = await fetch('../api/newsfeed.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content })
+        body: JSON.stringify({ content, sport })
       });
 
       const result = await res.json();
@@ -90,6 +135,15 @@
         alert('Post failed: ' + result.message);
       }
     });
+
+    document.querySelectorAll('#sportTags .tag-button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#sportTags .tag-button').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        document.getElementById('postSport').value = btn.dataset.sport;
+      });
+    });
+
 
     async function likePost(postId) {
         const res = await fetch('../api/like.php', {

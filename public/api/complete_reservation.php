@@ -1,8 +1,6 @@
 <?php
-// api/complete_reservation.php
 session_start();
 header('Content-Type: application/json');
-
 require_once '../includes/db.php';
 
 // Load Composer's autoloader
@@ -11,16 +9,20 @@ require_once '../includes/db.php';
 //use PHPMailer\PHPMailer\PHPMailer;
 //use PHPMailer\PHPMailer\Exception;
 
+
 $data = json_decode(file_get_contents('php://input'), true);
 
-// Ensure all required fields are provided
-if (!isset($data['fullName'], $data['contactNumber'], $data['email'], $data['paymentMethod'], $data['sport'], $data['court'], $data['court_id'], $data['section'], $data['date'], $data['time'], $data['payment'])) {
-    echo json_encode(['success' => false, 'message' => 'Incomplete data']);
-    exit;
+// Validate required fields
+$required = ['fullName', 'contactNumber', 'email', 'paymentMethod', 'sport', 'court', 'court_id', 'date', 'time', 'payment'];
+foreach ($required as $key) {
+    if (empty($data[$key])) {
+        echo json_encode(['success' => false, 'message' => "Missing required field: $key"]);
+        exit;
+    }
 }
 
-// Common data
-$user_id = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : '';
+// Common fields
+$user_id = $_SESSION['user_id'] ?? '';
 $fullName = $data['fullName'];
 $contactNumber = $data['contactNumber'];
 $email = $data['email'];
@@ -29,63 +31,58 @@ $paymentMethod = $data['paymentMethod'];
 $sport = $data['sport'];
 $court = $data['court'];
 $court_id = $data['court_id'];
-$section = $data['section'];
 $payment = $data['payment'];
 $date = $data['date'];
-$timeSlots = $data['time']; // Could be string or array
+$timeSlots = is_array($data['time']) ? $data['time'] : explode(',', $data['time']);
 
-if (is_string($timeSlots)) {
-    $timeSlots = explode(',', $timeSlots);
-}
-
-if (!is_array($timeSlots) || count($timeSlots) === 0) {
+if (empty($timeSlots)) {
     echo json_encode(['success' => false, 'message' => 'Time slots must be a non-empty array']);
     exit;
 }
 
-
-if (!is_array($timeSlots) || count($timeSlots) === 0) {
-    echo json_encode(['success' => false, 'message' => 'Time slots must be a non-empty array']);
-    exit;
+// Determine section(s)
+$sections = [];
+if (strtolower($sport) === 'badminton') {
+    $sections = is_array($data['section']) ? $data['section'] : explode(',', (string)($data['section'] ?? ''));
+    if (empty($sections) || (count($sections) === 1 && $sections[0] === '')) {
+        echo json_encode(['success' => false, 'message' => 'Badminton reservations require section(s)']);
+        exit;
+    }
+} else {
+    $sections = [0]; // section_number = 0 for non-sectioned sports
 }
 
-$section = $data['section'] ?? null;
+// Remove duplicate time slots
+$timeSlots = array_unique($timeSlots);
 
-// Normalize section into an array of strings
-if (!is_array($section)) {
-    $section = explode(',', (string)$section);
-}
-
-if (count($section) === 0) {
-    echo json_encode(['success' => false, 'message' => 'Section must be a non-empty array']);
-    exit;
-}
+// Remove duplicate sections
+$sections = array_unique($sections);
 
 
 try {
-    // Start transaction
     $pdo->beginTransaction();
-
-    // Insert the reservation WITHOUT time column
     $reservation_ids = [];
 
-    foreach ($section as $sec) {
-        // Insert reservation for this section number
-        $stmt = $pdo->prepare("INSERT INTO reservations (user_id, full_name, contact_number, email, reservation_info, payment_method, sport, court, court_id, section_number, date, payment)
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$user_id, $fullName, $contactNumber, $email, $reservationInfo, $paymentMethod, $sport, $court, $court_id, $sec, $date, $payment]);
+    // Insert the reservation ONCE
+    $stmt = $pdo->prepare("INSERT INTO reservations (user_id, full_name, contact_number, email, reservation_info, payment_method, sport, court, court_id, section_number, date, payment)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->execute([
+        $user_id, $fullName, $contactNumber, $email,
+        $reservationInfo, $paymentMethod, $sport, $court,
+        $court_id, 0, $date, $payment // use section_number = 0 as a placeholder
+    ]);
+    $reservation_id = $pdo->lastInsertId();
 
-        $reservation_id = $pdo->lastInsertId();
-        $reservation_ids[] = $reservation_id;
-
-        // Insert all time slots for this reservation & section
-        $slotStmt = $pdo->prepare("INSERT INTO reservation_slots (reservation_id, time, section_number) VALUES (?, ?, ?)");
+    // Insert all (section, time) combinations into reservation_slots
+    $slotStmt = $pdo->prepare("INSERT INTO reservation_slots (reservation_id, time, section_number) VALUES (?, ?, ?)");
+    foreach ($sections as $sec) {
         foreach ($timeSlots as $slotTime) {
-            $slotStmt->execute([$reservation_id, $slotTime, $sec]);
+            $slotStmt->execute([$reservation_id, $slotTime, (int)$sec]);
         }
     }
 
-    // Handle guest_reservations for all reservation ids
+
+    // Handle guest reservations
     if (!$user_id) {
         $guest_stmt = $pdo->prepare("INSERT INTO reservation_guests (reservation_id, guest_name, guest_contact, payment)
                                      VALUES (?, ?, ?, ?)");
@@ -94,16 +91,16 @@ try {
         }
     }
 
-    // Commit transaction
     $pdo->commit();
 
-    // Format the times as a list for the email
+    // Format time slots
     $timesListHtml = '<ul>';
     foreach ($timeSlots as $slotTime) {
         $timesListHtml .= "<li>{$slotTime}</li>";
     }
     $timesListHtml .= '</ul>';
 
+    // Email content (optional: enable PHPMailer block below)
     $to = $email;
     $subject = "Your CourtMaster Reservation Confirmation";
 
@@ -129,40 +126,35 @@ try {
     </html>
     ";
 
- 
-    
-   /*  $mail = new PHPMailer(true);
-    
+    // Uncomment to enable email sending
+    /*
+    $mail = new PHPMailer(true);
     try {
-        // Server settings
         $mail->isSMTP();
-        $mail->Host = 'mail.courtmaster.online'; // GoDaddy SMTP
+        $mail->Host = 'mail.courtmaster.online';
         $mail->SMTPAuth = true;
         $mail->Username = 'no-reply@courtmaster.online';
-        $mail->Password = 'd=+P$tJwoLx2'; // Replace securely
+        $mail->Password = 'd=+P$tJwoLx2';
         $mail->SMTPSecure = 'ssl';
         $mail->Port = 465;
-    
-        // Recipients
+
         $mail->setFrom('no-reply@courtmaster.online', 'CourtMaster');
         $mail->addAddress($to, $fullName);
-    
-        // Content
+
         $mail->isHTML(true);
         $mail->Subject = $subject;
         $mail->Body = $message;
-    
+
         $mail->send();
-        echo json_encode(['success' => true, 'to' => $to]);
     } catch (Exception $e) {
         echo json_encode(['success' => false, 'error' => 'Mailer Error: ' . $mail->ErrorInfo]);
+        exit;
     }
+    */
 
- */
-echo json_encode(['success' => true, 'to' => $to]);
-    
+    echo json_encode(['success' => true, 'to' => $to]);
+
 } catch (PDOException $e) {
-    // Rollback on error
     $pdo->rollBack();
     echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
 }

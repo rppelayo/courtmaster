@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Subscription Form – CourtMaster</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center">
+  <div class="bg-gray-800 p-8 rounded-xl shadow max-w-md w-full space-y-6">
+    <h1 class="text-2xl font-bold text-center text-orange-500">Subscribe Now</h1>
+    <p class="text-center text-gray-300">Click confirm to enjoy subscriber benefits immediately.</p>
+
+    <div>
+    <label class="block text-sm font-medium text-white">Payment Options</label>
+    <div class="space-y-2 mx-4">
+        <label class="mx-6 text-white">
+        <input type="radio" name="payment_method" value="cash" class="mr-2" required />
+        Cash On-site
+        </label>
+        <label class="mx-6 text-white">
+        <input type="radio" name="payment_method" value="credit-card" class="mr-2" />
+        Credit Card
+        </label>
+        <label class="mx-6 text-white">
+        <input type="radio" name="payment_method" value="paypal" class="mr-2" />
+        GCash/PayMaya
+        </label>
+        <label class="mx-6 text-white">
+        <input type="radio" name="payment_method" value="bank-transfer" class="mr-2" />
+        Bank Transfer
+        </label>
+    </div>
+    </div>
+
+
+    <button onclick="subscribe()" class="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded shadow">
+      ✅ Confirm Subscription
+    </button>
+
+    <p id="result-msg" class="text-center text-sm mt-4"></p>
+  </div>
+
+  <script>
+    function subscribe() {
+      const selectedPayment = document.querySelector('input[name="payment_method"]:checked');
+        if (!selectedPayment) {
+        alert("Please select a payment method.");
+        return; // prevent form submission
+      }
+
+      fetch("api/subscribe_user.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      })
+      .then(res => res.json())
+      .then(data => {
+        const msg = document.getElementById("result-msg");
+        if (data.success) {
+          msg.textContent = "🎉 Subscription successful!";
+          msg.classList.remove("text-red-400");
+          msg.classList.add("text-green-400");
+
+          setTimeout(() => {
+                if (window.parent && typeof window.parent.showTab === 'function') {
+                window.parent.showTab('dashboard');
+                }
+          }, 3000);
+        } else {
+          msg.textContent = "❌ " + data.message;
+          msg.classList.remove("text-green-400");
+          msg.classList.add("text-red-400");
+        }
+      })
+      .catch(err => {
+        document.getElementById("result-msg").textContent = "❌ Error subscribing.";
+      });
+    }
+  </script>
+</body>
+</html>

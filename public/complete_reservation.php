@@ -47,7 +47,7 @@ session_start();
       </div>
 
       <div>
-        <label for="fee" class="block text-sm font-medium text-white ">Fee</label>
+        <label for="fee" class="block text-sm font-medium text-white ">Fee (Includes Processing Fee)</label>
         <input type="text" id="fee" class="mt-1 block w-full border px-3 py-2 rounded" readonly />
       </div>
 
@@ -136,9 +136,12 @@ session_start();
           document.getElementById("time-info").textContent = "Time: N/A";
       }
 
+      let fee_ = parseInt(fee); 
+      let process_fee = <?php echo ($_SESSION['role'] === 'subscriber') ? 7 : 15; ?>;
 
-      // Assuming the fee is constant for now, adjust as needed.
-      document.getElementById("fee").value = "P"+fee; 
+      let payment = fee_ + process_fee;
+
+      document.getElementById("fee").value = "P"+payment; 
 
       document.getElementById("reservation-form").addEventListener("submit", async function(e) {
         e.preventDefault();
@@ -148,8 +151,7 @@ session_start();
         const reservationInfo = document.getElementById("reservation-notes").value;
         const paymentMethod = document.querySelector('input[name="payment-method"]:checked').value;
         let email = document.getElementById("email").value;
-        let payment = fee;
-
+       
         if(!section) 
           section = 0
 

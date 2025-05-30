@@ -38,6 +38,7 @@ $users = $stmt->fetchAll();
       <option value="">All Roles</option>
       <option value="owner" <?= ($filter_role === 'owner') ? 'selected' : '' ?>>Owner</option>
       <option value="user" <?= ($filter_role === 'user') ? 'selected' : '' ?>>User</option>
+      <option value="subscriber" <?= ($filter_role === 'subscriber') ? 'selected' : '' ?>>Subscriber</option>
     </select>
   </form>
 
@@ -96,6 +97,7 @@ $users = $stmt->fetchAll();
           <label class="block text-sm">Role</label>
           <select id="user-role" class="w-full border rounded px-3 py-2">
             <option value="user">User</option>
+            <option value="subscriber">Subscriber</option>
             <option value="admin">Admin</option>
           </select>
         </div>
