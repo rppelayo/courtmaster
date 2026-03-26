@@ -1,0 +1,99 @@
+name: Deploy Pickleball
+
+on:
+  push:
+    branches:
+      - pickleball-port
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-pickleball-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_SSH_PORT != '' && secrets.DEPLOY_SSH_PORT || '22' }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      DB_HOST: ${{ secrets.PICKLEBALL_DB_HOST }}
+      DB_NAME: ${{ secrets.PICKLEBALL_DB_NAME }}
+      DB_USER: ${{ secrets.PICKLEBALL_DB_USER }}
+      DB_PASS: ${{ secrets.PICKLEBALL_DB_PASS }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate deploy configuration
+        run: |
+          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PATH DB_HOST DB_NAME DB_USER DB_PASS; do
+            if [ -z "${!var}" ]; then
+              echo "Missing required value: $var"
+              exit 1
+            fi
+          done
+
+      - name: Load SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+
+      - name: Trust deploy host
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Prepare remote directories
+        run: |
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH' '$DEPLOY_PATH/includes' '$DEPLOY_PATH/uploads/payment-proofs'"
+
+      - name: Sync public app to server
+        run: |
+          rsync -az --omit-dir-times --no-perms \
+            -e "ssh -p $DEPLOY_PORT" \
+            --exclude 'uploads/payment-proofs/' \
+            --exclude 'api/error_log' \
+            ./public/ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
+
+      - name: Build production DB credentials file
+        run: |
+          cat > ./db.credentials.php <<'PHP'
+          <?php
+          return [
+              'host' => '__DB_HOST__',
+              'dbname' => '__DB_NAME__',
+              'user' => '__DB_USER__',
+              'pass' => '__DB_PASS__',
+              'charset' => 'utf8mb4',
+              'app_env' => 'production',
+          ];
+          PHP
+
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          replacements = {
+              "__DB_HOST__": os.environ["DB_HOST"],
+              "__DB_NAME__": os.environ["DB_NAME"],
+              "__DB_USER__": os.environ["DB_USER"],
+              "__DB_PASS__": os.environ["DB_PASS"],
+          }
+
+          path = Path("db.credentials.php")
+          content = path.read_text(encoding="utf-8")
+          for needle, value in replacements.items():
+              content = content.replace(needle, value.replace("\\", "\\\\").replace("'", "\\'"))
+          path.write_text(content, encoding="utf-8")
+          PY
+
+      - name: Upload production DB credentials
+        run: |
+          scp -P "$DEPLOY_PORT" ./db.credentials.php "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/includes/db.credentials.php"
+          rm -f ./db.credentials.php
+
+      - name: Set writable permissions
+        run: |
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "chmod 775 '$DEPLOY_PATH/uploads' '$DEPLOY_PATH/uploads/payment-proofs' || true"

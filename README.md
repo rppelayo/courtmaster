@@ -1,5 +1,10 @@
 # CourtMaster
 
+## Deployment
+
+Pickleball production deployment notes are in [docs/deployment.md](docs/deployment.md).
+
+The GitHub Actions deployment workflow targets the pickleball fork at `pickleball.courtmaster.online`.
 
 ### Changelog
 
