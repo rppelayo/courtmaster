@@ -152,11 +152,50 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
   <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/js/all.min.js" integrity="sha512-b+nQTCdtTBIRIbraqNEwsjB6UvL3UEMkXnhzd8awtCYh0Kcsjl9uEgwVFVbhoj3uu1DO1ZMacNvLoyJJiNfcvg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <link rel="stylesheet" href="styles/admin-theme.css">
   <script>
-    const walkInToday = <?php echo json_encode($today); ?>;
+    const walkInServerToday = <?php echo json_encode($today); ?>;
 
     document.addEventListener("DOMContentLoaded", function() {
+      applyClientWalkInDate();
       initializeWalkInForm();
     });
+
+    function padWalkInValue(value) {
+      return value.toString().padStart(2, "0");
+    }
+
+    function getClientNow() {
+      return new Date();
+    }
+
+    function getClientToday() {
+      const now = getClientNow();
+      return `${now.getFullYear()}-${padWalkInValue(now.getMonth() + 1)}-${padWalkInValue(now.getDate())}`;
+    }
+
+    function buildClientLocalTimestamp() {
+      const now = getClientNow();
+      const offsetMinutes = -now.getTimezoneOffset();
+      const sign = offsetMinutes >= 0 ? "+" : "-";
+      const absoluteOffset = Math.abs(offsetMinutes);
+      const offsetHours = padWalkInValue(Math.floor(absoluteOffset / 60));
+      const offsetRemainderMinutes = padWalkInValue(absoluteOffset % 60);
+
+      return `${now.getFullYear()}-${padWalkInValue(now.getMonth() + 1)}-${padWalkInValue(now.getDate())}T${padWalkInValue(now.getHours())}:${padWalkInValue(now.getMinutes())}:${padWalkInValue(now.getSeconds())}${sign}${offsetHours}:${offsetRemainderMinutes}`;
+    }
+
+    function applyClientWalkInDate() {
+      const walkInDateInput = document.getElementById("walk-in-date");
+      const summaryDate = document.getElementById("walk-in-summary-date");
+      const clientToday = getClientToday() || walkInServerToday;
+
+      if (walkInDateInput) {
+        walkInDateInput.value = clientToday;
+      }
+
+      if (summaryDate) {
+        summaryDate.textContent = clientToday;
+      }
+    }
 
     function initializeWalkInForm() {
       const courtSelect = document.getElementById("walk-in-court");
@@ -172,6 +211,10 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
       startSelect.addEventListener("change", populateWalkInEndTimes);
       endSelect.addEventListener("change", updateWalkInSummary);
 
+      if (!courtSelect.value && courtSelect.options.length > 1) {
+        courtSelect.selectedIndex = 1;
+      }
+
       populateWalkInStartTimes();
     }
 
@@ -183,16 +226,28 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
     function populateWalkInStartTimes() {
       const selectedCourt = getSelectedWalkInCourtOption();
       const startSelect = document.getElementById("walk-in-start-time");
+      const endSelect = document.getElementById("walk-in-end-time");
 
       startSelect.innerHTML = '<option value="">Select time-in</option>';
+      endSelect.innerHTML = '<option value="">Select time-out</option>';
+      startSelect.disabled = true;
+      endSelect.disabled = true;
 
       if (!selectedCourt || !selectedCourt.value) {
-        populateWalkInEndTimes();
+        updateWalkInSummary();
         return;
       }
 
       const slots = buildHourlySlots(selectedCourt.dataset.openTime, selectedCourt.dataset.closeTime);
       const availableStarts = slots.filter((slot) => !isPastTimeSlot(slot));
+
+      if (availableStarts.length === 0) {
+        startSelect.innerHTML = '<option value="">No remaining time slots today</option>';
+        updateWalkInSummary();
+        return;
+      }
+
+      startSelect.disabled = false;
 
       availableStarts.forEach((slot) => {
         const option = document.createElement("option");
@@ -200,6 +255,10 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
         option.textContent = formatTo12Hour(slot);
         startSelect.appendChild(option);
       });
+
+      if (startSelect.options.length > 1) {
+        startSelect.selectedIndex = 1;
+      }
 
       populateWalkInEndTimes();
     }
@@ -210,6 +269,7 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
       const endSelect = document.getElementById("walk-in-end-time");
 
       endSelect.innerHTML = '<option value="">Select time-out</option>';
+      endSelect.disabled = true;
 
       if (!selectedCourt || !selectedCourt.value || !startSelect.value) {
         updateWalkInSummary();
@@ -237,19 +297,29 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
         endSelect.appendChild(option);
       }
 
+      if (endSelect.options.length > 1) {
+        endSelect.disabled = false;
+        endSelect.selectedIndex = 1;
+      } else {
+        endSelect.innerHTML = '<option value="">No valid time-out options</option>';
+      }
+
       updateWalkInSummary();
     }
 
     function buildHourlySlots(openTime, closeTime) {
       const slots = [];
-      if (!openTime || !closeTime) {
+      const normalizedOpen = normalizeTimeValue(openTime);
+      const normalizedClose = normalizeTimeValue(closeTime);
+
+      if (!normalizedOpen || !normalizedClose) {
         return slots;
       }
 
-      let cursor = openTime;
-      while (cursor < closeTime) {
+      let cursor = normalizedOpen;
+      while (toMinutes(cursor) < toMinutes(normalizedClose)) {
         const next = addOneHour(cursor);
-        if (!next || next > closeTime) {
+        if (!next || toMinutes(next) > toMinutes(normalizedClose)) {
           break;
         }
 
@@ -260,30 +330,77 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
       return slots;
     }
 
+    function normalizeTimeValue(timeStr) {
+      if (!timeStr || typeof timeStr !== "string") {
+        return "";
+      }
+
+      const parts = timeStr.trim().split(":");
+      if (parts.length < 2) {
+        return "";
+      }
+
+      const hour = Number(parts[0]);
+      const minute = Number(parts[1]);
+      const second = parts.length > 2 ? Number(parts[2]) : 0;
+
+      if ([hour, minute, second].some((part) => Number.isNaN(part))) {
+        return "";
+      }
+
+      return `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}:${second.toString().padStart(2, "0")}`;
+    }
+
+    function toMinutes(timeStr) {
+      const normalized = normalizeTimeValue(timeStr);
+      if (!normalized) {
+        return Number.NaN;
+      }
+
+      const [hour, minute] = normalized.split(":").map(Number);
+      return (hour * 60) + minute;
+    }
+
     function addOneHour(timeStr) {
-      if (!timeStr) {
+      const normalized = normalizeTimeValue(timeStr);
+      if (!normalized) {
         return "";
       }
 
-      const [hour, minute] = timeStr.split(":").map(Number);
-      if (Number.isNaN(hour) || Number.isNaN(minute)) {
+      const minutes = toMinutes(normalized);
+      if (Number.isNaN(minutes)) {
         return "";
       }
 
-      const nextHour = (hour + 1).toString().padStart(2, "0");
-      return `${nextHour}:${minute.toString().padStart(2, "0")}:00`;
+      const nextMinutes = minutes + 60;
+      const nextHour = Math.floor(nextMinutes / 60);
+      const minute = nextMinutes % 60;
+
+      return `${nextHour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}:00`;
     }
 
     function formatTo12Hour(timeStr) {
-      const [hour, minute] = timeStr.split(":").map(Number);
+      const normalized = normalizeTimeValue(timeStr);
+      if (!normalized) {
+        return "";
+      }
+
+      const [hour, minute] = normalized.split(":").map(Number);
       const ampm = hour >= 12 ? "PM" : "AM";
       const formattedHour = hour % 12 || 12;
       return `${formattedHour}:${minute.toString().padStart(2, "0")} ${ampm}`;
     }
 
     function isPastTimeSlot(timeStr) {
+      const normalized = normalizeTimeValue(timeStr);
+      const walkInDateInput = document.getElementById("walk-in-date");
+      const walkInDate = walkInDateInput && walkInDateInput.value ? walkInDateInput.value : getClientToday();
+      if (!normalized) {
+        return false;
+      }
+
       const now = new Date();
-      const slotDateTime = new Date(`${walkInToday}T${timeStr}`);
+      const slotDateTime = new Date(`${walkInDate}T${normalized}`);
       return slotDateTime < now;
     }
 
@@ -298,7 +415,11 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
       if (!selectedCourt || !selectedCourt.value || !startTime || !endTime) {
         hoursElement.textContent = "0 hours";
         totalElement.textContent = "P0.00";
-        rangeElement.textContent = "Select a court, time-in, and time-out.";
+        if (selectedCourt && selectedCourt.value) {
+          rangeElement.textContent = `${selectedCourt.dataset.courtName || selectedCourt.textContent.trim()} | Select a time-in and time-out.`;
+        } else {
+          rangeElement.textContent = "Select a court, time-in, and time-out.";
+        }
         return;
       }
 
@@ -336,7 +457,9 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
         end_time: document.getElementById("walk-in-end-time").value,
         payment_method: document.getElementById("walk-in-payment-method").value,
         payment_status: document.getElementById("walk-in-payment-status").value,
-        reservation_info: document.getElementById("walk-in-notes").value
+        reservation_info: document.getElementById("walk-in-notes").value,
+        client_local_now: buildClientLocalTimestamp(),
+        client_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || ""
       };
 
       const response = await fetch("api/create_walk_in_reservation.php", {
@@ -475,7 +598,7 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
         <div class="admin-stat-grid mt-6 gap-3 sm:grid-cols-2 xl:grid-cols-1">
           <div class="admin-stat-card">
             <div class="admin-stat-label">Date</div>
-            <div class="admin-stat-value text-base"><?= htmlspecialchars($today) ?></div>
+            <div id="walk-in-summary-date" class="admin-stat-value text-base"><?= htmlspecialchars($today) ?></div>
           </div>
           <div class="admin-stat-card">
             <div class="admin-stat-label">Courts Ready</div>

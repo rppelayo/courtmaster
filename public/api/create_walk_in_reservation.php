@@ -13,6 +13,34 @@ function walkInResponse(array $payload, int $statusCode = 200): void
     exit;
 }
 
+function resolveWalkInClientReference(array $data): DateTimeImmutable
+{
+    $clientTimezone = trim((string) ($data['client_timezone'] ?? ''));
+    $clientLocalNow = trim((string) ($data['client_local_now'] ?? ''));
+
+    $timezone = null;
+    if ($clientTimezone !== '') {
+        try {
+            $timezone = new DateTimeZone($clientTimezone);
+        } catch (Throwable) {
+            $timezone = null;
+        }
+    }
+
+    if ($clientLocalNow !== '') {
+        try {
+            $clientNow = new DateTimeImmutable($clientLocalNow);
+            return $timezone instanceof DateTimeZone ? $clientNow->setTimezone($timezone) : $clientNow;
+        } catch (Throwable) {
+            // Fall through to server time if the client payload is malformed.
+        }
+    }
+
+    return $timezone instanceof DateTimeZone
+        ? new DateTimeImmutable('now', $timezone)
+        : new DateTimeImmutable('now');
+}
+
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
     walkInResponse(['success' => false, 'message' => 'Access denied.'], 403);
 }
@@ -41,7 +69,8 @@ $reservationInfo = trim((string) ($data['reservation_info'] ?? ''));
 $userId = (int) $_SESSION['user_id'];
 $userRole = (string) ($_SESSION['role'] ?? 'admin');
 
-$today = (new DateTimeImmutable('today'))->format('Y-m-d');
+$clientReference = resolveWalkInClientReference($data);
+$today = $clientReference->format('Y-m-d');
 if ($date !== $today) {
     walkInResponse(['success' => false, 'message' => 'Walk-in reservations can only be created for today.'], 422);
 }
@@ -78,7 +107,7 @@ if (!doReservationTimeSlotsFitCourtHours($timeSlots, (string) $court['open_time'
     walkInResponse(['success' => false, 'message' => 'The selected walk-in time is outside the court schedule.'], 422);
 }
 
-if (hasPastReservationTimeSlots($date, $timeSlots)) {
+if (hasPastReservationTimeSlots($date, $timeSlots, $clientReference)) {
     walkInResponse(['success' => false, 'message' => 'Walk-in reservations cannot start in the past.'], 422);
 }
 

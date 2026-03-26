@@ -6,4 +6,5 @@ return [
     'pass' => 'replace-with-db-password',
     'charset' => 'utf8mb4',
     'app_env' => 'production',
+    'timezone' => 'Asia/Manila',
 ];

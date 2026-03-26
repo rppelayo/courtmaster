@@ -16,6 +16,7 @@ $config = [
     'pass' => dbConfigEnv('db_pass', 'secret88!'),
     'charset' => dbConfigEnv('db_charset', 'utf8mb4'),
     'app_env' => dbConfigEnv('app_env', 'local'),
+    'timezone' => dbConfigEnv('timezone', 'Asia/Manila'),
 ];
 
 $credentialsPath = __DIR__ . '/db.credentials.php';
@@ -28,6 +29,10 @@ if (is_file($credentialsPath)) {
             }
         }
     }
+}
+
+if (!empty($config['timezone'])) {
+    date_default_timezone_set($config['timezone']);
 }
 
 try {

@@ -87,8 +87,13 @@ include 'chatbox.php';
   </div>
 
   <script>
+    function cacheBustPage(page) {
+      const separator = page.includes("?") ? "&" : "?";
+      return `${page}${separator}v=${Date.now()}`;
+    }
+
     function loadPage(page) {
-      document.getElementById("content-frame").src = page;
+      document.getElementById("content-frame").src = cacheBustPage(page);
       highlightMenu(page);
     }
 
@@ -129,7 +134,9 @@ include 'chatbox.php';
 
     window.addEventListener("DOMContentLoaded", () => {
       const iframe = document.getElementById("content-frame");
-      highlightMenu(iframe.src.split("/").pop());
+      const initialPage = iframe.getAttribute("src");
+      iframe.src = cacheBustPage(initialPage);
+      highlightMenu(initialPage);
     });
   </script>
 </body>
