@@ -30,7 +30,7 @@ include 'chatbox.php';
               <div class="admin-sidebar-copy">One venue, multiple courts</div>
             </div>
           </div>
-          <button onclick="toggleSidebar()" class="rounded-xl bg-white/10 px-3 py-2 text-white transition hover:bg-white/15">
+          <button onclick="toggleSidebar()" class="admin-sidebar-toggle" type="button" aria-label="Toggle sidebar">
             <i class="fas fa-bars"></i>
           </button>
         </div>
@@ -45,6 +45,9 @@ include 'chatbox.php';
         <?php } ?>
         <button id="menu-admin_schedules" onclick="loadPage('admin_schedules.php')" class="admin-menu-btn">
           <i class="fas fa-calendar-alt"></i><span class="menu-label">Court Schedules</span>
+        </button>
+        <button id="menu-admin_walkin" onclick="loadPage('admin_walkin.php')" class="admin-menu-btn">
+          <i class="fas fa-person-walking"></i><span class="menu-label">Walk-ins</span>
         </button>
         <button id="menu-admin_reservations" onclick="loadPage('admin_reservations.php')" class="admin-menu-btn">
           <i class="fas fa-receipt"></i><span class="menu-label">Reservations</span>
@@ -64,7 +67,7 @@ include 'chatbox.php';
           <div>
             <div class="admin-overline">Back Office</div>
             <div class="admin-topbar-title">Pickleball Venue Operations</div>
-            <div class="admin-topbar-copy">Manage one venue's court schedules, reservations, and staff-side activity from one place.</div>
+            <div class="admin-topbar-copy">Manage one venue's court schedules, walk-ins, reservations, and staff-side activity from one place.</div>
           </div>
           <div class="admin-pill"><?php echo htmlspecialchars(ucfirst((string) $_SESSION['role'])); ?> Access</div>
         </div>
@@ -74,7 +77,7 @@ include 'chatbox.php';
         <?php if (($_SESSION['role'] ?? '') === 'admin') { ?>
           <iframe id="content-frame" src="admin_users.php" class="admin-iframe border-none"></iframe>
         <?php } else { ?>
-          <iframe id="content-frame" src="admin_schedules.php" class="admin-iframe border-none"></iframe>
+          <iframe id="content-frame" src="admin_walkin.php" class="admin-iframe border-none"></iframe>
         <?php } ?>
       </div>
     </main>

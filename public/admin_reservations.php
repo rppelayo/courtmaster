@@ -127,18 +127,6 @@ $reservationStatement = $pdo->prepare($reservationSql);
 $reservationStatement->execute($params);
 $reservations = $reservationStatement->fetchAll(PDO::FETCH_ASSOC);
 
-$courtWhereClauses = [];
-$courtParams = [];
-if ($userRole === 'owner') {
-    $courtWhereClauses[] = 'owner_id = ?';
-    $courtParams[] = $ownerId;
-}
-
-$courtWhereSql = $courtWhereClauses === [] ? '' : 'WHERE ' . implode(' AND ', $courtWhereClauses);
-$courtSql = "SELECT id, name, type, price, open_time, close_time FROM courts {$courtWhereSql} ORDER BY name";
-$courtStatement = $pdo->prepare($courtSql);
-$courtStatement->execute($courtParams);
-$availableCourts = $courtStatement->fetchAll(PDO::FETCH_ASSOC);
 $today = (new DateTimeImmutable('today'))->format('Y-m-d');
 $todayBookings = 0;
 $walkInCount = 0;
@@ -169,25 +157,320 @@ foreach ($reservations as $reservation) {
   <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/js/all.min.js" integrity="sha512-b+nQTCdtTBIRIbraqNEwsjB6UvL3UEMkXnhzd8awtCYh0Kcsjl9uEgwVFVbhoj3uu1DO1ZMacNvLoyJJiNfcvg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <link rel="stylesheet" href="styles/admin-theme.css">
   <script>
-    const walkInToday = <?php echo json_encode($today); ?>;
+    const editState = {
+      reservationId: null,
+      courtSlots: [],
+      reservedSlots: [],
+      price: 0
+    };
+
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("edit-date").addEventListener("change", refreshEditAvailability);
+      document.getElementById("edit-start-time").addEventListener("change", handleEditStartTimeChange);
+      document.getElementById("edit-end-time").addEventListener("change", () => {
+        renderEditSlotGrid();
+        updateEditSelectionSummary();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !document.getElementById("editModal").classList.contains("hidden")) {
+          closeEditModal();
+        }
+      });
+    });
+
+    function normalizeEditTime(value) {
+      const rawValue = String(value || "").trim();
+      if (!rawValue) {
+        return "";
+      }
+
+      if (/^\d{2}:\d{2}$/.test(rawValue)) {
+        return `${rawValue}:00`;
+      }
+
+      return /^\d{2}:\d{2}:\d{2}$/.test(rawValue) ? rawValue : "";
+    }
+
+    function formatEditTimeLabel(timeStr) {
+      const normalized = normalizeEditTime(timeStr);
+      if (!normalized) {
+        return "";
+      }
+
+      const [hourValue, minuteValue] = normalized.split(":").map(Number);
+      const suffix = hourValue >= 12 ? "PM" : "AM";
+      const displayHour = hourValue % 12 || 12;
+      return `${displayHour}:${minuteValue.toString().padStart(2, "0")} ${suffix}`;
+    }
+
+    function addOneHourToEditTime(timeStr) {
+      const normalized = normalizeEditTime(timeStr);
+      if (!normalized) {
+        return "";
+      }
+
+      const [hourValue, minuteValue] = normalized.split(":").map(Number);
+      if (Number.isNaN(hourValue) || Number.isNaN(minuteValue)) {
+        return "";
+      }
+
+      const nextHour = (hourValue + 1).toString().padStart(2, "0");
+      return `${nextHour}:${minuteValue.toString().padStart(2, "0")}:00`;
+    }
+
+    function buildEditSlotsFromRange(startTime, endTime) {
+      const normalizedStart = normalizeEditTime(startTime);
+      const normalizedEnd = normalizeEditTime(endTime);
+      if (!normalizedStart || !normalizedEnd || normalizedStart >= normalizedEnd) {
+        return [];
+      }
+
+      const slots = [];
+      let cursor = normalizedStart;
+
+      while (cursor && cursor < normalizedEnd) {
+        slots.push(cursor);
+        cursor = addOneHourToEditTime(cursor);
+      }
+
+      return slots;
+    }
+
+    function getCurrentEditSlots() {
+      const startTime = document.getElementById("edit-start-time").value;
+      const endTime = document.getElementById("edit-end-time").value;
+      return buildEditSlotsFromRange(startTime, endTime);
+    }
+
+    function isPastEditSlot(date, timeStr) {
+      const normalizedDate = String(date || "").trim();
+      const normalizedTime = normalizeEditTime(timeStr);
+      if (!normalizedDate || !normalizedTime) {
+        return false;
+      }
+
+      return new Date(`${normalizedDate}T${normalizedTime}`) < new Date();
+    }
+
+    function editSlotIsBlocked(date, timeStr) {
+      const normalizedTime = normalizeEditTime(timeStr);
+      return editState.reservedSlots.includes(normalizedTime) || isPastEditSlot(date, normalizedTime);
+    }
+
+    function areEditSlotsSelectable(date, timeSlots) {
+      if (!Array.isArray(timeSlots) || timeSlots.length === 0) {
+        return false;
+      }
+
+      return timeSlots.every((timeSlot) => {
+        const normalizedTime = normalizeEditTime(timeSlot);
+        return editState.courtSlots.includes(normalizedTime) && !editSlotIsBlocked(date, normalizedTime);
+      });
+    }
+
+    function toggleEditSaveButton(enabled) {
+      const saveButton = document.getElementById("edit-save-btn");
+      saveButton.disabled = !enabled;
+      saveButton.classList.toggle("opacity-60", !enabled);
+      saveButton.classList.toggle("cursor-not-allowed", !enabled);
+    }
+
+    function populateEditStartTimes(preferredStart = "") {
+      const selectedDate = document.getElementById("edit-date").value;
+      const startSelect = document.getElementById("edit-start-time");
+      startSelect.innerHTML = '<option value="">Select time-in</option>';
+
+      editState.courtSlots.forEach((timeSlot) => {
+        if (editSlotIsBlocked(selectedDate, timeSlot)) {
+          return;
+        }
+
+        const option = document.createElement("option");
+        option.value = timeSlot;
+        option.textContent = formatEditTimeLabel(timeSlot);
+        startSelect.appendChild(option);
+      });
+
+      const hasPreferredStart = Array.from(startSelect.options).some((option) => option.value === preferredStart);
+      startSelect.value = hasPreferredStart ? preferredStart : "";
+      startSelect.disabled = startSelect.options.length <= 1;
+    }
+
+    function populateEditEndTimes(preferredEnd = "") {
+      const selectedDate = document.getElementById("edit-date").value;
+      const startTime = document.getElementById("edit-start-time").value;
+      const endSelect = document.getElementById("edit-end-time");
+
+      endSelect.innerHTML = '<option value="">Select time-out</option>';
+
+      if (!startTime) {
+        endSelect.disabled = true;
+        return;
+      }
+
+      const startIndex = editState.courtSlots.indexOf(startTime);
+      if (startIndex === -1) {
+        endSelect.disabled = true;
+        return;
+      }
+
+      for (let endIndex = startIndex + 1; endIndex <= editState.courtSlots.length; endIndex++) {
+        const selectedSlots = editState.courtSlots.slice(startIndex, endIndex);
+        if (!areEditSlotsSelectable(selectedDate, selectedSlots)) {
+          break;
+        }
+
+        const lastSlot = selectedSlots[selectedSlots.length - 1];
+        const endTime = addOneHourToEditTime(lastSlot);
+        const option = document.createElement("option");
+        option.value = endTime;
+        option.textContent = formatEditTimeLabel(endTime);
+        endSelect.appendChild(option);
+      }
+
+      const hasPreferredEnd = Array.from(endSelect.options).some((option) => option.value === preferredEnd);
+      if (hasPreferredEnd) {
+        endSelect.value = preferredEnd;
+      } else if (endSelect.options.length > 1) {
+        endSelect.selectedIndex = 1;
+      } else {
+        endSelect.value = "";
+      }
+
+      endSelect.disabled = endSelect.options.length <= 1;
+    }
+
+    function renderEditSlotGrid() {
+      const slotGrid = document.getElementById("edit-slot-grid");
+      const selectedDate = document.getElementById("edit-date").value;
+      const selectedSlots = new Set(getCurrentEditSlots());
+
+      if (editState.courtSlots.length === 0) {
+        slotGrid.innerHTML = `
+          <div class="rounded-2xl border border-dashed border-slate-300 bg-white/80 px-4 py-5 text-sm text-slate-500 sm:col-span-2 xl:col-span-3">
+            No hourly court schedule is available for this reservation.
+          </div>
+        `;
+        return;
+      }
+
+      slotGrid.innerHTML = "";
+
+      editState.courtSlots.forEach((timeSlot) => {
+        const endTime = addOneHourToEditTime(timeSlot);
+        const isSelected = selectedSlots.has(timeSlot);
+        const isTaken = editState.reservedSlots.includes(timeSlot);
+        const isPast = isPastEditSlot(selectedDate, timeSlot);
+
+        let toneClasses = "border-slate-200 bg-white/90 text-slate-700";
+        let statusLabel = "Available";
+        let statusClasses = "text-slate-500";
+
+        if (isSelected) {
+          toneClasses = "border-teal-300 bg-teal-100 text-teal-900";
+          statusLabel = "Selected";
+          statusClasses = "text-teal-700";
+        } else if (isTaken) {
+          toneClasses = "border-rose-200 bg-rose-100 text-rose-800";
+          statusLabel = "Taken";
+          statusClasses = "text-rose-600";
+        } else if (isPast) {
+          toneClasses = "border-slate-300 bg-slate-200 text-slate-500";
+          statusLabel = "Past";
+          statusClasses = "text-slate-500";
+        }
+
+        const slotCard = document.createElement("div");
+        slotCard.className = `rounded-2xl border px-4 py-3 ${toneClasses}`;
+        slotCard.innerHTML = `
+          <div class="text-sm font-semibold">${formatEditTimeLabel(timeSlot)} - ${formatEditTimeLabel(endTime)}</div>
+          <div class="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${statusClasses}">${statusLabel}</div>
+        `;
+
+        slotGrid.appendChild(slotCard);
+      });
+    }
+
+    function updateEditSelectionSummary(message = "") {
+      const selectedDate = document.getElementById("edit-date").value;
+      const selectedSlots = getCurrentEditSlots();
+      const hoursElement = document.getElementById("edit-hours-played");
+      const totalElement = document.getElementById("edit-total-payment");
+      const summaryElement = document.getElementById("edit-selection-summary");
+      const availabilityElement = document.getElementById("edit-availability-note");
+
+      if (!selectedDate || selectedSlots.length === 0) {
+        hoursElement.textContent = "0 hours";
+        totalElement.textContent = "P0.00";
+        summaryElement.textContent = "Select a new time-in and time-out to update this reservation.";
+        availabilityElement.textContent = message || "Taken timeslots are shown in red and cannot be selected.";
+        toggleEditSaveButton(false);
+        return;
+      }
+
+      const selectedHours = selectedSlots.length;
+      const selectedStart = selectedSlots[0];
+      const selectedEnd = addOneHourToEditTime(selectedSlots[selectedSlots.length - 1]);
+      const totalPrice = editState.price * selectedHours;
+      const takenCount = editState.reservedSlots.length;
+
+      hoursElement.textContent = `${selectedHours} hour${selectedHours === 1 ? "" : "s"}`;
+      totalElement.textContent = `P${totalPrice.toFixed(2)}`;
+      summaryElement.textContent = `${selectedDate} | ${formatEditTimeLabel(selectedStart)} - ${formatEditTimeLabel(selectedEnd)}`;
+      availabilityElement.textContent = message || (
+        takenCount > 0
+          ? `${takenCount} taken time slot${takenCount === 1 ? "" : "s"} shown below in red.`
+          : "No conflicting time slots on this date."
+      );
+      toggleEditSaveButton(true);
+    }
+
+    function applyEditContext(data, resetSelection = false) {
+      editState.reservationId = Number(data.reservation?.id || 0);
+      editState.courtSlots = Array.isArray(data.court_slots) ? data.court_slots.map(normalizeEditTime).filter(Boolean) : [];
+      editState.reservedSlots = Array.isArray(data.reserved_slots) ? data.reserved_slots.map(normalizeEditTime).filter(Boolean) : [];
+      editState.price = Number(data.court?.price || 0);
+
+      const selectedDate = document.getElementById("edit-date").value;
+      let preferredSlots = resetSelection
+        ? (Array.isArray(data.time_slots) ? data.time_slots.map(normalizeEditTime).filter(Boolean) : [])
+        : getCurrentEditSlots();
+
+      let infoMessage = "Taken timeslots are shown in red and cannot be selected.";
+      if (!areEditSlotsSelectable(selectedDate, preferredSlots)) {
+        preferredSlots = [];
+        if (!resetSelection) {
+          infoMessage = "The previously selected time range is not available on this date. Choose a new range.";
+        }
+      }
+
+      const preferredStart = preferredSlots[0] || "";
+      const preferredEnd = preferredSlots.length > 0 ? addOneHourToEditTime(preferredSlots[preferredSlots.length - 1]) : "";
+
+      populateEditStartTimes(preferredStart);
+      populateEditEndTimes(preferredEnd);
+      renderEditSlotGrid();
+      updateEditSelectionSummary(infoMessage);
+    }
 
     async function openEditModal(id) {
       const response = await fetch(`api/get_reservation.php?id=${id}`);
       const data = await response.json();
 
       if (!data || !data.success) {
+        alert(data?.message || "Failed to load reservation details.");
         return;
       }
 
       const reservation = data.reservation;
       document.getElementById("edit-id").value = reservation.id;
       document.getElementById("edit-user").value = reservation.user_id || "";
-      document.getElementById("edit-court").value = reservation.court || "";
-      document.getElementById("edit-date").value = reservation.date || "";
+      document.getElementById("edit-court").value = data.court?.name || reservation.court || "";
+      document.getElementById("edit-date").value = data.context_date || reservation.date || "";
       document.getElementById("payment_status_field").value = reservation.payment_status || "pending";
       document.getElementById("section-container").style.display = String(reservation.section_number) === "0" ? "none" : "block";
       document.getElementById("edit-section").value = reservation.section_number || 0;
-      document.getElementById("edit-time").value = reservation.time || "";
+      applyEditContext(data, true);
       document.getElementById("editModal").classList.remove("hidden");
       document.body.classList.add("overflow-hidden");
     }
@@ -197,14 +480,50 @@ foreach ($reservations as $reservation) {
       document.body.classList.remove("overflow-hidden");
     }
 
+    function handleEditModalBackdropClick(event) {
+      if (event.target === event.currentTarget) {
+        closeEditModal();
+      }
+    }
+
+    async function refreshEditAvailability() {
+      const reservationId = document.getElementById("edit-id").value;
+      const selectedDate = document.getElementById("edit-date").value;
+
+      if (!reservationId || !selectedDate) {
+        return;
+      }
+
+      const response = await fetch(`api/get_reservation.php?id=${reservationId}&date=${encodeURIComponent(selectedDate)}`);
+      const data = await response.json();
+
+      if (!data || !data.success) {
+        alert(data?.message || "Failed to load time slot availability.");
+        return;
+      }
+
+      applyEditContext(data, false);
+    }
+
+    function handleEditStartTimeChange() {
+      populateEditEndTimes();
+      renderEditSlotGrid();
+      updateEditSelectionSummary();
+    }
+
     async function saveEdit(event) {
       event.preventDefault();
 
+      const timeSlots = getCurrentEditSlots();
+      if (timeSlots.length === 0) {
+        alert("Select a valid time range first.");
+        return;
+      }
+
       const payload = {
         id: document.getElementById("edit-id").value,
-        court: document.getElementById("edit-court").value,
         date: document.getElementById("edit-date").value,
-        time: document.getElementById("edit-time").value,
+        time_slots: timeSlots,
         payment_status: document.getElementById("payment_status_field").value
       };
 
@@ -214,213 +533,14 @@ foreach ($reservations as $reservation) {
         body: JSON.stringify(payload)
       });
 
-      if (response.ok) {
+      const result = await response.json().catch(() => ({}));
+
+      if (response.ok && result.success) {
         location.reload();
         return;
       }
 
-      alert("Failed to update reservation.");
-    }
-
-    document.addEventListener("DOMContentLoaded", function() {
-      initializeWalkInForm();
-    });
-
-    function initializeWalkInForm() {
-      const courtSelect = document.getElementById("walk-in-court");
-      const startSelect = document.getElementById("walk-in-start-time");
-      const endSelect = document.getElementById("walk-in-end-time");
-
-      if (!courtSelect || courtSelect.options.length <= 1) {
-        updateWalkInSummary();
-        return;
-      }
-
-      courtSelect.addEventListener("change", populateWalkInStartTimes);
-      startSelect.addEventListener("change", populateWalkInEndTimes);
-      endSelect.addEventListener("change", updateWalkInSummary);
-
-      populateWalkInStartTimes();
-    }
-
-    function getSelectedWalkInCourtOption() {
-      const courtSelect = document.getElementById("walk-in-court");
-      return courtSelect.options[courtSelect.selectedIndex] || null;
-    }
-
-    function populateWalkInStartTimes() {
-      const selectedCourt = getSelectedWalkInCourtOption();
-      const startSelect = document.getElementById("walk-in-start-time");
-
-      startSelect.innerHTML = '<option value="">Select time-in</option>';
-
-      if (!selectedCourt || !selectedCourt.value) {
-        populateWalkInEndTimes();
-        return;
-      }
-
-      const slots = buildHourlySlots(selectedCourt.dataset.openTime, selectedCourt.dataset.closeTime);
-      const availableStarts = slots.filter((slot) => !isPastTimeSlot(slot));
-
-      availableStarts.forEach((slot) => {
-        const option = document.createElement("option");
-        option.value = slot;
-        option.textContent = formatTo12Hour(slot);
-        startSelect.appendChild(option);
-      });
-
-      populateWalkInEndTimes();
-    }
-
-    function populateWalkInEndTimes() {
-      const selectedCourt = getSelectedWalkInCourtOption();
-      const startSelect = document.getElementById("walk-in-start-time");
-      const endSelect = document.getElementById("walk-in-end-time");
-
-      endSelect.innerHTML = '<option value="">Select time-out</option>';
-
-      if (!selectedCourt || !selectedCourt.value || !startSelect.value) {
-        updateWalkInSummary();
-        return;
-      }
-
-      const slots = buildHourlySlots(selectedCourt.dataset.openTime, selectedCourt.dataset.closeTime);
-      const startIndex = slots.indexOf(startSelect.value);
-
-      if (startIndex === -1) {
-        updateWalkInSummary();
-        return;
-      }
-
-      for (let index = startIndex + 1; index <= slots.length; index++) {
-        const previousSlot = slots[index - 1];
-        const endTime = addOneHour(previousSlot);
-        if (!endTime) {
-          continue;
-        }
-
-        const option = document.createElement("option");
-        option.value = endTime;
-        option.textContent = formatTo12Hour(endTime);
-        endSelect.appendChild(option);
-      }
-
-      updateWalkInSummary();
-    }
-
-    function buildHourlySlots(openTime, closeTime) {
-      const slots = [];
-      if (!openTime || !closeTime) {
-        return slots;
-      }
-
-      let cursor = openTime;
-      while (cursor < closeTime) {
-        const next = addOneHour(cursor);
-        if (!next || next > closeTime) {
-          break;
-        }
-
-        slots.push(cursor);
-        cursor = next;
-      }
-
-      return slots;
-    }
-
-    function addOneHour(timeStr) {
-      if (!timeStr) {
-        return "";
-      }
-
-      const [hour, minute] = timeStr.split(":").map(Number);
-      if (Number.isNaN(hour) || Number.isNaN(minute)) {
-        return "";
-      }
-
-      const nextHour = (hour + 1).toString().padStart(2, "0");
-      return `${nextHour}:${minute.toString().padStart(2, "0")}:00`;
-    }
-
-    function formatTo12Hour(timeStr) {
-      const [hour, minute] = timeStr.split(":").map(Number);
-      const ampm = hour >= 12 ? "PM" : "AM";
-      const formattedHour = hour % 12 || 12;
-      return `${formattedHour}:${minute.toString().padStart(2, "0")} ${ampm}`;
-    }
-
-    function isPastTimeSlot(timeStr) {
-      const now = new Date();
-      const slotDateTime = new Date(`${walkInToday}T${timeStr}`);
-      return slotDateTime < now;
-    }
-
-    function updateWalkInSummary() {
-      const selectedCourt = getSelectedWalkInCourtOption();
-      const startTime = document.getElementById("walk-in-start-time").value;
-      const endTime = document.getElementById("walk-in-end-time").value;
-      const hoursElement = document.getElementById("walk-in-hours");
-      const totalElement = document.getElementById("walk-in-total");
-      const rangeElement = document.getElementById("walk-in-range");
-
-      if (!selectedCourt || !selectedCourt.value || !startTime || !endTime) {
-        hoursElement.textContent = "0 hours";
-        totalElement.textContent = "P0.00";
-        rangeElement.textContent = "Select a court, time-in, and time-out.";
-        return;
-      }
-
-      const timeOutSlots = buildReservationTimeOptions(startTime, endTime);
-      const hours = timeOutSlots.length;
-      const rate = Number(selectedCourt.dataset.rate || 0);
-      const total = rate * hours;
-
-      hoursElement.textContent = `${hours} hour${hours === 1 ? "" : "s"}`;
-      totalElement.textContent = `P${total.toFixed(2)}`;
-      rangeElement.textContent = `${selectedCourt.dataset.courtName || selectedCourt.textContent.trim()} | ${formatTo12Hour(startTime)} - ${formatTo12Hour(endTime)}`;
-    }
-
-    function buildReservationTimeOptions(startTime, endTime) {
-      const range = [];
-      let cursor = startTime;
-
-      while (cursor && cursor < endTime) {
-        range.push(cursor);
-        cursor = addOneHour(cursor);
-      }
-
-      return range;
-    }
-
-    async function submitWalkInReservation(event) {
-      event.preventDefault();
-
-      const payload = {
-        customer_name: document.getElementById("walk-in-customer-name").value,
-        contact_number: document.getElementById("walk-in-contact").value,
-        court_id: document.getElementById("walk-in-court").value,
-        date: document.getElementById("walk-in-date").value,
-        start_time: document.getElementById("walk-in-start-time").value,
-        end_time: document.getElementById("walk-in-end-time").value,
-        payment_method: document.getElementById("walk-in-payment-method").value,
-        payment_status: document.getElementById("walk-in-payment-status").value,
-        reservation_info: document.getElementById("walk-in-notes").value
-      };
-
-      const response = await fetch("api/create_walk_in_reservation.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        alert(result.message || "Failed to create walk-in reservation.");
-        return;
-      }
-
-      alert(`Walk-in reservation created. Total: P${Number(result.payment || 0).toFixed(2)}`);
-      location.reload();
+      alert(result.message || "Failed to update reservation.");
     }
   </script>
 </head>
@@ -428,8 +548,8 @@ foreach ($reservations as $reservation) {
   <div class="admin-page-shell">
     <div class="admin-page-header">
       <div class="admin-overline">Reservation Management</div>
-      <div class="admin-title">Monitor bookings and create same-day walk-ins</div>
-      <div class="admin-copy">Keep staff operations moving with one place for advance bookings, walk-ins, payment follow-up, and reservation edits.</div>
+      <div class="admin-title">Monitor bookings and update reservation details</div>
+      <div class="admin-copy">Review advance reservations, walk-ins, payment follow-up, and reservation edits from one cleaner operations page.</div>
     </div>
 
     <div class="admin-stat-grid mb-5 md:grid-cols-3">
@@ -473,118 +593,14 @@ foreach ($reservations as $reservation) {
         </div>
       </div>
 
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+        <a href="admin_walkin.php" class="admin-secondary-btn whitespace-nowrap">
+          <i class="fas fa-person-walking"></i>
+          Open Walk-ins
+        </a>
         <div class="admin-pill"><?= htmlspecialchars(ucfirst($userRole)) ?> Access</div>
-        <div class="text-sm text-slate-500">Use the walk-in form below for same-day in-person rentals.</div>
       </div>
     </form>
-
-    <section class="admin-card mb-6">
-      <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div class="max-w-2xl">
-          <div class="admin-overline">Walk-in Flow</div>
-          <h2 class="mt-2 text-2xl font-bold text-slate-800">Create a same-day reservation</h2>
-          <p class="mt-2 text-sm text-slate-500">
-            Staff can record a player on arrival, choose the court and booking range, then capture payment details without leaving the admin panel.
-          </p>
-        </div>
-        <div class="admin-stat-grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div class="admin-stat-card min-w-[150px]">
-            <div class="admin-stat-label">Date</div>
-            <div class="admin-stat-value text-base"><?= htmlspecialchars($today) ?></div>
-          </div>
-          <div class="admin-stat-card min-w-[150px]">
-            <div class="admin-stat-label">Hours</div>
-            <div id="walk-in-hours" class="admin-stat-value text-base">0 hours</div>
-          </div>
-          <div class="admin-stat-card min-w-[150px]">
-            <div class="admin-stat-label">Total</div>
-            <div id="walk-in-total" class="admin-stat-value text-base">P0.00</div>
-          </div>
-        </div>
-      </div>
-
-      <form class="mt-6 grid gap-4 lg:grid-cols-2" onsubmit="submitWalkInReservation(event)">
-        <div>
-          <label for="walk-in-customer-name" class="admin-field-label">Customer Name</label>
-          <input id="walk-in-customer-name" type="text" class="admin-input" required>
-        </div>
-
-        <div>
-          <label for="walk-in-contact" class="admin-field-label">Contact Number</label>
-          <input id="walk-in-contact" type="text" class="admin-input" required>
-        </div>
-
-        <div>
-          <label for="walk-in-court" class="admin-field-label">Court</label>
-          <select id="walk-in-court" class="admin-select" required>
-            <option value="">Select a court</option>
-            <?php foreach ($availableCourts as $court): ?>
-              <option
-                value="<?php echo (int) $court['id']; ?>"
-                data-court-name="<?php echo htmlspecialchars((string) $court['name']); ?>"
-                data-rate="<?php echo htmlspecialchars((string) $court['price']); ?>"
-                data-open-time="<?php echo htmlspecialchars((string) $court['open_time']); ?>"
-                data-close-time="<?php echo htmlspecialchars((string) $court['close_time']); ?>"
-              >
-                <?php echo htmlspecialchars($court['name'] . ' | P' . number_format((float) $court['price'], 2) . '/hr'); ?>
-              </option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-
-        <div>
-          <label for="walk-in-date" class="admin-field-label">Walk-in Date</label>
-          <input id="walk-in-date" type="date" value="<?php echo htmlspecialchars($today); ?>" class="admin-input" readonly>
-        </div>
-
-        <div>
-          <label for="walk-in-start-time" class="admin-field-label">Time-in</label>
-          <select id="walk-in-start-time" class="admin-select" required>
-            <option value="">Select time-in</option>
-          </select>
-        </div>
-
-        <div>
-          <label for="walk-in-end-time" class="admin-field-label">Time-out</label>
-          <select id="walk-in-end-time" class="admin-select" required>
-            <option value="">Select time-out</option>
-          </select>
-        </div>
-
-        <div>
-          <label for="walk-in-payment-method" class="admin-field-label">Payment Method</label>
-          <select id="walk-in-payment-method" class="admin-select" required>
-            <option value="cash">Cash</option>
-            <option value="gcash-maya">GCash</option>
-            <option value="card">Card</option>
-          </select>
-        </div>
-
-        <div>
-          <label for="walk-in-payment-status" class="admin-field-label">Payment Status</label>
-          <select id="walk-in-payment-status" class="admin-select" required>
-            <option value="paid">Paid</option>
-            <option value="pending">Pending</option>
-          </select>
-        </div>
-
-        <div class="lg:col-span-2">
-          <label for="walk-in-notes" class="admin-field-label">Notes</label>
-          <textarea id="walk-in-notes" rows="3" class="admin-textarea" placeholder="Optional walk-in notes"></textarea>
-        </div>
-
-        <div class="lg:col-span-2 rounded-2xl border border-teal-100 bg-teal-50 px-4 py-4">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p id="walk-in-range" class="text-sm font-medium text-teal-900">Select a court, time-in, and time-out.</p>
-            <button type="submit" class="admin-primary-btn">
-              <i class="fas fa-plus-circle"></i>
-              Create Walk-in Reservation
-            </button>
-          </div>
-        </div>
-      </form>
-    </section>
 
     <section class="admin-card">
       <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -663,8 +679,8 @@ foreach ($reservations as $reservation) {
     </section>
   </div>
 
-  <div id="editModal" class="admin-modal-backdrop hidden">
-    <div class="admin-modal-panel max-w-xl">
+  <div id="editModal" class="admin-modal-backdrop hidden items-start overflow-y-auto px-4 py-4 sm:px-6 sm:py-6" onclick="handleEditModalBackdropClick(event)">
+    <div class="admin-modal-panel my-auto max-h-[calc(100vh-2rem)] max-w-4xl overflow-y-auto">
       <div class="flex items-start justify-between gap-4">
         <div>
           <div class="admin-overline">Reservation Details</div>
@@ -677,36 +693,84 @@ foreach ($reservations as $reservation) {
 
       <form id="edit-form" class="mt-5 grid gap-4" onsubmit="saveEdit(event)">
         <input type="hidden" name="id" id="edit-id" />
+        <input type="text" name="payment_status" id="payment_status_field" class="hidden admin-input">
 
-        <div>
-          <label class="admin-field-label" for="edit-user">User ID</label>
-          <input type="text" name="user_id" id="edit-user" class="admin-input" readonly>
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <label class="admin-field-label" for="edit-user">User ID</label>
+            <input type="text" name="user_id" id="edit-user" class="admin-input" readonly>
+          </div>
+
+          <div>
+            <label class="admin-field-label" for="edit-court">Court</label>
+            <input type="text" name="court" id="edit-court" class="admin-input" readonly>
+          </div>
+
+          <div id="section-container">
+            <label class="admin-field-label" for="edit-section">Section</label>
+            <input type="number" name="section" id="edit-section" class="admin-input">
+          </div>
+
+          <div>
+            <label class="admin-field-label" for="edit-date">Date</label>
+            <input type="date" name="date" id="edit-date" class="admin-input">
+          </div>
         </div>
 
-        <div>
-          <label class="admin-field-label" for="edit-court">Court</label>
-          <input type="text" name="court" id="edit-court" class="admin-input" readonly>
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div class="text-sm font-semibold text-slate-800">Edit Reservation Time Range</div>
+              <p class="mt-1 text-sm text-slate-500">Choose a time-in and time-out. Every 1-hour slot in between will be saved for this reservation.</p>
+            </div>
+            <div id="edit-hours-played" class="admin-pill">0 hours</div>
+          </div>
+
+          <div class="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <label class="admin-field-label" for="edit-start-time">Time-in</label>
+              <select id="edit-start-time" class="admin-select">
+                <option value="">Select time-in</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="admin-field-label" for="edit-end-time">Time-out</label>
+              <select id="edit-end-time" class="admin-select" disabled>
+                <option value="">Select time-out</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="mt-4 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.18em]">
+            <span class="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-500">Available</span>
+            <span class="rounded-full border border-rose-200 bg-rose-100 px-3 py-1 text-rose-600">Taken</span>
+            <span class="rounded-full border border-teal-300 bg-teal-100 px-3 py-1 text-teal-700">Selected</span>
+            <span class="rounded-full border border-slate-300 bg-slate-200 px-3 py-1 text-slate-500">Past</span>
+          </div>
+
+          <div id="edit-slot-grid" class="mt-4 grid max-h-[320px] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3"></div>
         </div>
 
-        <div id="section-container">
-          <label class="admin-field-label" for="edit-section">Section</label>
-          <input type="number" name="section" id="edit-section" class="admin-input">
-        </div>
+        <div class="rounded-2xl border border-teal-100 bg-teal-50 px-4 py-4">
+          <div class="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">Edit Summary</div>
+          <div id="edit-selection-summary" class="mt-2 text-sm font-medium text-teal-900">Select a new time-in and time-out to update this reservation.</div>
 
-        <div>
-          <label class="admin-field-label" for="edit-date">Date</label>
-          <input type="date" name="date" id="edit-date" class="admin-input">
-        </div>
-
-        <div>
-          <label class="admin-field-label" for="edit-time">Time</label>
-          <input type="time" step="3600" name="time" id="edit-time" class="admin-input">
-          <input type="text" name="payment_status" id="payment_status_field" class="hidden admin-input">
+          <div class="mt-4 grid gap-3 sm:grid-cols-2">
+            <div class="rounded-2xl border border-white/80 bg-white/85 px-4 py-3">
+              <div class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Estimated Total</div>
+              <div id="edit-total-payment" class="mt-2 text-lg font-semibold text-slate-800">P0.00</div>
+            </div>
+            <div class="rounded-2xl border border-white/80 bg-white/85 px-4 py-3">
+              <div class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Availability</div>
+              <div id="edit-availability-note" class="mt-2 text-sm text-slate-600">Taken timeslots are shown in red and cannot be selected.</div>
+            </div>
+          </div>
         </div>
 
         <div class="mt-2 flex justify-end gap-3">
           <button type="button" onclick="closeEditModal()" class="admin-secondary-btn">Cancel</button>
-          <button type="submit" class="admin-primary-btn">Save Changes</button>
+          <button type="submit" id="edit-save-btn" class="admin-primary-btn">Save Changes</button>
         </div>
       </form>
     </div>
