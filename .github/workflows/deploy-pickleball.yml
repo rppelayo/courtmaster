@@ -18,6 +18,7 @@ jobs:
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       DEPLOY_PORT: ${{ secrets.DEPLOY_SSH_PORT != '' && secrets.DEPLOY_SSH_PORT || '22' }}
       DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
       DB_HOST: ${{ secrets.PICKLEBALL_DB_HOST }}
       DB_NAME: ${{ secrets.PICKLEBALL_DB_NAME }}
       DB_USER: ${{ secrets.PICKLEBALL_DB_USER }}
@@ -28,31 +29,48 @@ jobs:
 
       - name: Validate deploy configuration
         run: |
-          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PATH DB_HOST DB_NAME DB_USER DB_PASS; do
+          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PATH DEPLOY_SSH_PRIVATE_KEY DB_HOST DB_NAME DB_USER DB_PASS; do
             if [ -z "${!var}" ]; then
               echo "Missing required value: $var"
               exit 1
             fi
           done
 
-      - name: Load SSH key
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+      - name: Install deploy key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -lf ~/.ssh/deploy_key
 
       - name: Trust deploy host
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
 
+      - name: Verify SSH access
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o PreferredAuthentications=publickey \
+            -p "$DEPLOY_PORT" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "echo 'SSH connection verified'"
+
       - name: Prepare remote directories
         run: |
-          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH' '$DEPLOY_PATH/includes' '$DEPLOY_PATH/uploads/payment-proofs'"
+          ssh -i ~/.ssh/deploy_key \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -p "$DEPLOY_PORT" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "mkdir -p '$DEPLOY_PATH' '$DEPLOY_PATH/includes' '$DEPLOY_PATH/uploads/payment-proofs'"
 
       - name: Sync public app to server
         run: |
           rsync -az --omit-dir-times --no-perms \
-            -e "ssh -p $DEPLOY_PORT" \
+            -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -p $DEPLOY_PORT" \
             --exclude 'uploads/payment-proofs/' \
             --exclude 'api/error_log' \
             ./public/ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
@@ -91,9 +109,18 @@ jobs:
 
       - name: Upload production DB credentials
         run: |
-          scp -P "$DEPLOY_PORT" ./db.credentials.php "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/includes/db.credentials.php"
+          scp -i ~/.ssh/deploy_key \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -P "$DEPLOY_PORT" \
+            ./db.credentials.php "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/includes/db.credentials.php"
           rm -f ./db.credentials.php
 
       - name: Set writable permissions
         run: |
-          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "chmod 775 '$DEPLOY_PATH/uploads' '$DEPLOY_PATH/uploads/payment-proofs' || true"
+          ssh -i ~/.ssh/deploy_key \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -p "$DEPLOY_PORT" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "chmod 775 '$DEPLOY_PATH/uploads' '$DEPLOY_PATH/uploads/payment-proofs' || true"
