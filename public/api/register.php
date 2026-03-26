@@ -8,7 +8,7 @@ $parts = explode("@", $email);
 $name = $parts[0];
 $password = $_POST['password'];
 $contact = $_POST['contact_number'];
-$user_type = $_POST['user_type'] ?? 'user';
+$user_type = 'user';
 
 if (!$full_name || !$email || !$password || !$name || !$contact) {
   die("Missing fields.");

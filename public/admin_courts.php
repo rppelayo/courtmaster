@@ -9,32 +9,16 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
 
 $userType = $_SESSION['role'];
 $userId = $_SESSION['user_id'];
-$filterSport = $_GET['filter_sport'] ?? '';
 
 if ($userType === 'admin') {
-    if ($filterSport !== '') {
-        $stmt = $pdo->prepare("SELECT * FROM courts WHERE type = ?");
-        $stmt->execute([$filterSport]);
-    } else {
-        $stmt = $pdo->query("SELECT * FROM courts");
-    }
+    $stmt = $pdo->query("SELECT * FROM courts ORDER BY name");
 } else {
-    if ($filterSport !== '') {
-        $stmt = $pdo->prepare("SELECT * FROM courts WHERE owner_id = ? AND type = ?");
-        $stmt->execute([$userId, $filterSport]);
-    } else {
-        $stmt = $pdo->prepare("SELECT * FROM courts WHERE owner_id = ?");
-        $stmt->execute([$userId]);
-    }
+    $stmt = $pdo->prepare("SELECT * FROM courts WHERE owner_id = ? ORDER BY name");
+    $stmt->execute([$userId]);
 }
 
 $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-$sportOptions = $pdo->query("SELECT DISTINCT type FROM courts WHERE type IS NOT NULL AND type != '' ORDER BY type")->fetchAll(PDO::FETCH_COLUMN);
-if (!in_array('pickleball', $sportOptions, true)) {
-    $sportOptions[] = 'pickleball';
-    sort($sportOptions);
-}
+$courtCount = count($courts);
 ?>
 
 <!DOCTYPE html>
@@ -50,26 +34,18 @@ if (!in_array('pickleball', $sportOptions, true)) {
   <div class="admin-page-shell">
     <div class="admin-page-header">
       <div class="admin-overline">Court Management</div>
-      <div class="admin-title">Manage the courts in your venue</div>
-      <div class="admin-copy">Create courts, adjust rates, update business hours, and keep the list aligned with the pickleball operation.</div>
+      <div class="admin-title">Manage the pickleball courts in your venue</div>
+      <div class="admin-copy">Create courts, adjust rates, and update business hours for the fixed pickleball courts used by this venue.</div>
     </div>
 
     <div class="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-      <form method="GET" class="admin-filter-bar flex flex-col gap-4 md:flex-row md:items-end">
-        <div class="w-full min-w-[220px]">
-          <label for="filter_sport" class="admin-field-label">Filter by Sport</label>
-          <select name="filter_sport" id="filter_sport" class="admin-select">
-            <option value="">All Sports</option>
-            <?php foreach ($sportOptions as $sport): ?>
-              <option value="<?= htmlspecialchars((string) $sport) ?>" <?= $filterSport === $sport ? 'selected' : '' ?>>
-                <?= htmlspecialchars(ucfirst(str_replace('-', ' ', (string) $sport))) ?>
-              </option>
-            <?php endforeach; ?>
-          </select>
+      <div class="admin-filter-bar flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <div class="text-sm font-semibold text-slate-800">Pickleball-only court setup</div>
+          <p class="mt-1 text-sm text-slate-500">Every court saved here is automatically treated as a pickleball court.</p>
         </div>
-
-        <button type="submit" class="admin-secondary-btn">Apply Filter</button>
-      </form>
+        <div class="admin-pill">Venue courts: <?= $courtCount ?></div>
+      </div>
 
       <button onclick="openCourtModal()" class="admin-primary-btn" type="button">
         <i class="fas fa-plus"></i>
@@ -85,7 +61,6 @@ if (!in_array('pickleball', $sportOptions, true)) {
             <th>Name</th>
             <th>Location</th>
             <th>Rate</th>
-            <th>Sport</th>
             <th>Business Hours</th>
             <th>Image</th>
             <th>Actions</th>
@@ -104,9 +79,6 @@ if (!in_array('pickleball', $sportOptions, true)) {
               <td><?= htmlspecialchars((string) $court['name']) ?></td>
               <td><?= htmlspecialchars((string) $court['location']) ?></td>
               <td>P<?= number_format((float) $court['price'], 2) ?></td>
-              <td>
-                <span class="admin-tag bg-teal-50 text-teal-700"><?= htmlspecialchars(ucfirst((string) ($court['type'] ?? ''))) ?></span>
-              </td>
               <td><?= htmlspecialchars($openLabel . ' - ' . $closeLabel) ?></td>
               <td>
                 <?php if (!empty($court['image_path'])): ?>
@@ -142,6 +114,7 @@ if (!in_array('pickleball', $sportOptions, true)) {
 
       <form id="courtForm" enctype="multipart/form-data" class="mt-5 grid gap-4">
         <input type="hidden" id="courtId">
+        <input type="hidden" id="courtType" name="type" value="pickleball">
 
         <div>
           <label for="courtName" class="admin-field-label">Court Name</label>
@@ -170,13 +143,11 @@ if (!in_array('pickleball', $sportOptions, true)) {
             <input type="number" id="courtPrice" name="price" class="admin-input" step="0.01" min="0">
           </div>
           <div>
-            <label for="courtType" class="admin-field-label">Sport</label>
-            <select id="courtType" name="type" class="admin-select" required>
-              <option value="" disabled selected>Select sport</option>
-              <?php foreach ($sportOptions as $sport): ?>
-                <option value="<?= htmlspecialchars((string) $sport) ?>"><?= htmlspecialchars(ucfirst(str_replace('-', ' ', (string) $sport))) ?></option>
-              <?php endforeach; ?>
-            </select>
+            <label class="admin-field-label">Sport</label>
+            <div class="admin-input flex items-center justify-between">
+              <span class="font-medium text-slate-800">Pickleball</span>
+              <span class="admin-tag bg-teal-50 text-teal-700">Fixed</span>
+            </div>
           </div>
         </div>
 
@@ -211,7 +182,7 @@ if (!in_array('pickleball', $sportOptions, true)) {
       document.getElementById("courtName").value = court.name;
       document.getElementById("courtLocation").value = court.location;
       document.getElementById("courtPrice").value = court.price;
-      document.getElementById("courtType").value = court.type || "";
+      document.getElementById("courtType").value = "pickleball";
       document.getElementById("open_hour").value = court.open_time;
       document.getElementById("close_hour").value = court.close_time;
       document.getElementById("courtModal").classList.remove("hidden");

@@ -2,9 +2,85 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Register – CourtMaster</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create Account | Pickleball Reservations</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --page-bg: #f4f8f3;
+      --page-accent: #dcefe7;
+      --surface: #ffffff;
+      --surface-soft: #edf6f1;
+      --border: #cfe0d8;
+      --text: #173630;
+      --muted: #5d776f;
+      --primary: #0f766e;
+      --primary-strong: #0b5f58;
+      --accent: #f2b66d;
+      --danger: #c2410c;
+    }
+
+    body {
+      background:
+        radial-gradient(circle at top left, rgba(15, 118, 110, 0.12), transparent 32%),
+        linear-gradient(180deg, #fbfdf9 0%, var(--page-bg) 100%);
+      color: var(--text);
+    }
+
+    .register-shell {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(207, 224, 216, 0.9);
+      box-shadow: 0 30px 80px rgba(23, 54, 48, 0.12);
+      backdrop-filter: blur(10px);
+    }
+
+    .register-visual {
+      background:
+        radial-gradient(circle at top, rgba(242, 182, 109, 0.35), transparent 28%),
+        linear-gradient(180deg, #fbfdf9 0%, var(--surface-soft) 100%);
+    }
+
+    .visual-frame {
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(220, 239, 231, 0.85));
+    }
+
+    .field-input {
+      background: #fcfefd;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .field-input::placeholder {
+      color: #809891;
+    }
+
+    .primary-button {
+      background: var(--primary);
+      color: #ffffff;
+    }
+
+    .primary-button:hover {
+      background: var(--primary-strong);
+    }
+
+    .brand-link {
+      color: var(--primary);
+    }
+
+    .strength-track {
+      background: rgba(207, 224, 216, 0.72);
+    }
+
+    .strength-fill {
+      background: linear-gradient(90deg, #d97706 0%, var(--accent) 45%, var(--primary) 100%);
+      transition: width 0.2s ease;
+    }
+
+    .helper-error {
+      color: var(--danger);
+    }
+  </style>
   <script>
     function checkPasswordStrength(password) {
       let strength = 0;
@@ -14,92 +90,146 @@
       if (/\d/.test(password)) strength++;
       if (/[\W_]/.test(password)) strength++;
 
-      const meter = document.getElementById("strength-meter");
+      const fill = document.getElementById("strength-fill");
       const label = document.getElementById("strength-label");
-
-      meter.value = strength;
-
       const levels = ["Very Weak", "Weak", "Fair", "Good", "Strong"];
-      label.textContent = levels[strength - 1] || "";
+      fill.style.width = `${(strength / 5) * 100}%`;
+      label.textContent = levels[strength - 1] || "Use at least 8 characters with a number.";
     }
 
     function validateForm(event) {
-      const pw1 = document.getElementById("password").value;
-      const pw2 = document.getElementById("confirm_password").value;
+      const password = document.getElementById("password").value;
+      const confirmPassword = document.getElementById("confirm_password").value;
+      const errorText = document.getElementById("password-error");
 
-      if (pw1 !== pw2) {
+      if (password !== confirmPassword) {
         event.preventDefault();
-        alert("Passwords do not match!");
+        errorText.textContent = "Passwords do not match.";
+        return;
       }
+
+      errorText.textContent = "";
     }
   </script>
 </head>
-<body class="bg-gray-800 flex items-center justify-center min-h-screen">
+<body class="min-h-screen px-4 py-6 md:px-6 md:py-10">
+  <div class="register-shell mx-auto flex w-full max-w-6xl flex-col overflow-hidden rounded-[28px] md:min-h-[760px] md:flex-row">
+    <div class="w-full p-8 md:w-1/2 md:p-12">
+      <div class="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800">
+        Player Registration
+      </div>
+      <h1 class="mt-5 text-4xl font-bold text-slate-800">Create your player account</h1>
+      <p class="mt-3 text-base text-slate-500">
+        Sign up once to save your details and speed up future pickleball reservations at the venue.
+      </p>
 
-    <!-- User Type Selection Modal -->
-  <div id="user-type-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-white p-8 rounded shadow-lg text-center w-80">
-      <h2 class="text-xl font-bold mb-4">Sign up as:</h2>
-      <button onclick="selectUserType('user')" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full mb-2">User</button>
-      <button onclick="selectUserType('owner')" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded w-full">Owner</button>
+      <form action="api/register.php" method="POST" onsubmit="validateForm(event)" class="mt-8 space-y-5">
+        <input type="hidden" name="user_type" value="user" />
+
+        <div>
+          <label for="full-name" class="block text-sm font-medium text-slate-700">Full Name</label>
+          <input
+            id="full-name"
+            type="text"
+            name="name"
+            required
+            placeholder="Enter your full name"
+            class="field-input mt-2 w-full rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-200"
+          />
+        </div>
+
+        <div>
+          <label for="contact-number" class="block text-sm font-medium text-slate-700">Contact Number</label>
+          <input
+            id="contact-number"
+            type="text"
+            name="contact_number"
+            required
+            placeholder="09XXXXXXXXX"
+            class="field-input mt-2 w-full rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-200"
+          />
+        </div>
+
+        <div>
+          <label for="email" class="block text-sm font-medium text-slate-700">Email</label>
+          <input
+            id="email"
+            type="email"
+            name="email"
+            required
+            placeholder="Enter your email"
+            class="field-input mt-2 w-full rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-200"
+          />
+        </div>
+
+        <div>
+          <label for="password" class="block text-sm font-medium text-slate-700">Password</label>
+          <input
+            id="password"
+            type="password"
+            name="password"
+            required
+            oninput="checkPasswordStrength(this.value)"
+            placeholder="Create a strong password"
+            class="field-input mt-2 w-full rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-200"
+          />
+          <div class="strength-track mt-3 h-2 w-full overflow-hidden rounded-full">
+            <div id="strength-fill" class="strength-fill h-full w-0 rounded-full"></div>
+          </div>
+          <p id="strength-label" class="mt-2 text-xs text-slate-500">Use at least 8 characters with a number.</p>
+        </div>
+
+        <div>
+          <label for="confirm_password" class="block text-sm font-medium text-slate-700">Confirm Password</label>
+          <input
+            id="confirm_password"
+            type="password"
+            required
+            placeholder="Re-enter your password"
+            class="field-input mt-2 w-full rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-200"
+          />
+          <p id="password-error" class="helper-error mt-2 text-xs"></p>
+        </div>
+
+        <button type="submit" class="primary-button w-full rounded-xl py-3 font-bold transition-all">
+          Create Account
+        </button>
+      </form>
+
+      <p class="mt-8 text-center text-sm text-slate-500">
+        Already have an account?
+        <a href="index.html" class="brand-link hover:underline">Sign in</a>
+      </p>
+    </div>
+
+    <div class="register-visual flex w-full items-center justify-center p-6 md:w-1/2">
+      <div class="visual-frame relative flex h-full min-h-[280px] w-full items-center justify-center rounded-[24px] p-8">
+        <div class="absolute inset-4 rounded-[20px] border border-white/80"></div>
+        <div class="relative z-10 max-w-md text-center">
+          <div class="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-white/80 text-4xl shadow-sm">
+            P
+          </div>
+          <h2 class="text-3xl font-bold text-slate-800">A faster booking return</h2>
+          <p class="mt-3 text-base text-slate-600">
+            Registered players can move through reservations faster with their contact details already ready for checkout.
+          </p>
+          <div class="mt-6 grid grid-cols-1 gap-3 text-sm text-slate-700 sm:grid-cols-3">
+            <div class="rounded-2xl border border-white/80 bg-white/60 px-4 py-4">
+              <div class="text-xl font-bold text-teal-700">1</div>
+              <div class="mt-1">Create Account</div>
+            </div>
+            <div class="rounded-2xl border border-white/80 bg-white/60 px-4 py-4">
+              <div class="text-xl font-bold text-teal-700">2</div>
+              <div class="mt-1">Pick Court</div>
+            </div>
+            <div class="rounded-2xl border border-white/80 bg-white/60 px-4 py-4">
+              <div class="text-xl font-bold text-teal-700">3</div>
+              <div class="mt-1">Reserve Faster</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
-
-  <div class="bg-gray-600 p-8 rounded-xl shadow-md w-full max-w-md">
-    <h1 class="text-2xl font-bold mb-6 text-center text-orange-600">Create Your Account</h1>
-
-    <form action="../api/register.php" method="POST" onsubmit="validateForm(event)" class="space-y-4">
-      <input type="hidden" name="user_type" id="user_type" value="" />
-      <div>
-        <label class="block text-sm font-medium text-white">Full Name</label>
-        <input type="text" name="name" required
-               class="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/>
-      </div>
-      
-      <div>
-        <label class="block text-sm font-medium text-white">Contact Number</label>
-        <input type="text" name="contact_number" required
-               class="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/>
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium text-white">Email</label>
-        <input type="email" name="email" required
-               class="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/>
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium text-white">Password</label>
-        <input type="password" name="password" id="password" required
-               oninput="checkPasswordStrength(this.value)"
-               class="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/>
-        <meter id="strength-meter" max="5" value="0" class="w-full mt-1"></meter>
-        <p id="strength-label" class="text-xs text-gray-500 mt-1"></p>
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium text-white">Confirm Password</label>
-        <input type="password" id="confirm_password" required
-               class="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/>
-      </div>
-      <button type="submit"
-              class="w-full bg-orange-600 text-white py-2 rounded-md hover:bg-orange-700">
-        Register
-      </button>
-    </form>
-
-    <p class="text-sm text-center text-white mt-4">
-      Already have an account?
-      <a href="index.html" class="text-orange-400 hover:underline">Login here</a>
-    </p>
-  </div>
-
-  <script>
-    function selectUserType(type) {
-      document.getElementById('user_type').value = type;
-      document.getElementById('user-type-modal').classList.add('hidden');
-      document.getElementById('registration-form').classList.remove('hidden');
-    }
-  </script>
 </body>
 </html>
