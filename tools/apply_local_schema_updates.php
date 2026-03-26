@@ -180,6 +180,20 @@ try {
 
     applyStatement(
         $pdo,
+        'Add reservations.payment_proof_path',
+        static fn(): bool => columnExists($pdo, $dbName, 'reservations', 'payment_proof_path'),
+        'ALTER TABLE reservations ADD COLUMN payment_proof_path VARCHAR(255) NULL AFTER payment'
+    );
+
+    applyStatement(
+        $pdo,
+        'Add reservations.booking_source',
+        static fn(): bool => columnExists($pdo, $dbName, 'reservations', 'booking_source'),
+        "ALTER TABLE reservations ADD COLUMN booking_source VARCHAR(20) NOT NULL DEFAULT 'advance' AFTER payment_proof_path"
+    );
+
+    applyStatement(
+        $pdo,
         'Allow NULL reservations.time for multi-slot bookings',
         static fn(): bool => false,
         'ALTER TABLE reservations MODIFY COLUMN time TIME NULL DEFAULT NULL'
@@ -252,6 +266,9 @@ try {
 
     $pdo->exec("UPDATE reservations SET payment = 0.00 WHERE payment IS NULL");
     echo '[apply] Backfilled reservations.payment values' . PHP_EOL;
+
+    $pdo->exec("UPDATE reservations SET booking_source = 'advance' WHERE booking_source IS NULL OR booking_source = ''");
+    echo '[apply] Backfilled reservations.booking_source values' . PHP_EOL;
 
     $pdo->exec("UPDATE reservations SET payment_status = 'pending' WHERE payment_status IS NULL OR payment_status = ''");
     echo '[apply] Backfilled reservations.payment_status values' . PHP_EOL;

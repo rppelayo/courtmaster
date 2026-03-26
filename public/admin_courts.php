@@ -2,164 +2,192 @@
 session_start();
 require_once "includes/db.php";
 
-// Redirect if not admin
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] === 'user') {
-    echo $_SESSION['role'];
+if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
     header("Location: ../index.html");
     exit;
 }
 
-$user_type = $_SESSION['role'];
-$user_id = $_SESSION['user_id'];
+$userType = $_SESSION['role'];
+$userId = $_SESSION['user_id'];
+$filterSport = $_GET['filter_sport'] ?? '';
 
-$filter_sport = $_GET['filter_sport'] ?? '';
-
-if ($user_type === 'admin') {
-    if (!empty($filter_sport)) {
+if ($userType === 'admin') {
+    if ($filterSport !== '') {
         $stmt = $pdo->prepare("SELECT * FROM courts WHERE type = ?");
-        $stmt->execute([$filter_sport]);
+        $stmt->execute([$filterSport]);
     } else {
-        $stmt = $pdo->prepare("SELECT * FROM courts");
-        $stmt->execute();
+        $stmt = $pdo->query("SELECT * FROM courts");
     }
-} else if ($user_type === 'owner') {
-    if (!empty($filter_sport)) {
+} else {
+    if ($filterSport !== '') {
         $stmt = $pdo->prepare("SELECT * FROM courts WHERE owner_id = ? AND type = ?");
-        $stmt->execute([$user_id, $filter_sport]);
+        $stmt->execute([$userId, $filterSport]);
     } else {
         $stmt = $pdo->prepare("SELECT * FROM courts WHERE owner_id = ?");
-        $stmt->execute([$user_id]);
+        $stmt->execute([$userId]);
     }
 }
-$courts = $stmt->fetchAll();
 
+$courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$sportOptions = $pdo->query("SELECT DISTINCT type FROM courts WHERE type IS NOT NULL AND type != '' ORDER BY type")->fetchAll(PDO::FETCH_COLUMN);
+if (!in_array('pickleball', $sportOptions, true)) {
+    $sportOptions[] = 'pickleball';
+    sort($sportOptions);
+}
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Admin - Courts</title>
+  <title>Pickleball Admin - Courts</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/js/all.min.js" integrity="sha512-b+nQTCdtTBIRIbraqNEwsjB6UvL3UEMkXnhzd8awtCYh0Kcsjl9uEgwVFVbhoj3uu1DO1ZMacNvLoyJJiNfcvg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <link rel="stylesheet" href="styles/admin-theme.css">
 </head>
-<body class="bg-gray-100">
-  <div class="p-6">
-    <h1 class="text-2xl text-orange-600 font-bold mb-4">Court Management</h1>
+<body class="admin-theme-body admin-frame-body">
+  <div class="admin-page-shell">
+    <div class="admin-page-header">
+      <div class="admin-overline">Court Management</div>
+      <div class="admin-title">Manage the courts in your venue</div>
+      <div class="admin-copy">Create courts, adjust rates, update business hours, and keep the list aligned with the pickleball operation.</div>
+    </div>
 
-    <button onclick="openCourtModal()" class="bg-orange-600 text-white px-4 py-2 mb-4 rounded">Add New Court</button>
-    <form method="GET" class="mb-4 flex items-center space-x-2">
-      <label for="filter_sport" class="font-medium">Filter by Sport:</label>
-      <select name="filter_sport" id="filter_sport" class="border px-2 py-1 rounded">
-        <option value="">All</option>
-        <option value="basketball" <?= ($_GET['filter_sport'] ?? '') == 'basketball' ? 'selected' : '' ?>>Basketball/Volleyball</option>
-        <option value="tennis" <?= ($_GET['filter_sport'] ?? '') == 'tennis' ? 'selected' : '' ?>>Tennis</option>
-        <option value="swimming" <?= ($_GET['filter_sport'] ?? '') == 'swimming' ? 'selected' : '' ?>>Swimming</option>
-        <option value="badminton" <?= ($_GET['filter_sport'] ?? '') == 'badminton' ? 'selected' : '' ?>>Badminton</option>
-      </select>
-      <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded">Apply</button>
-    </form>
+    <div class="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <form method="GET" class="admin-filter-bar flex flex-col gap-4 md:flex-row md:items-end">
+        <div class="w-full min-w-[220px]">
+          <label for="filter_sport" class="admin-field-label">Filter by Sport</label>
+          <select name="filter_sport" id="filter_sport" class="admin-select">
+            <option value="">All Sports</option>
+            <?php foreach ($sportOptions as $sport): ?>
+              <option value="<?= htmlspecialchars((string) $sport) ?>" <?= $filterSport === $sport ? 'selected' : '' ?>>
+                <?= htmlspecialchars(ucfirst(str_replace('-', ' ', (string) $sport))) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
 
-    <table class="min-w-full bg-white border">
-      <thead class="bg-gray-800 text-white">
-        <tr>
-          <th class="px-4 py-2">ID</th>
-          <th class="px-4 py-2">Name</th>
-          <th class="px-4 py-2">Location</th>
-          <th class="px-4 py-2">Price</th>
-          <th class="px-4 py-2">Sport</th>
-          <th class="px-4 py-2">Business Hours</th>
-          <th class="px-4 py-2">Image</th>
-          <th class="px-4 py-2">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php if(!empty($courts)) { ?>
-        <?php foreach ($courts as $court): ?>
-        <?php $open_time = DateTime::createFromFormat('H:i',$court['open_time'] ); ?>
-        <?php 
-          if($open_time != null) {
-            $open_time_12 = $open_time -> format('h:i a');
-          }else{
-            $open_time_12 = "00:00 AM";
-          }  
-          ?>
-        <?php $close_time = DateTime::createFromFormat('H:i',$court['close_time']); ?>
-        <?php
-          if($close_time != null) {
-             $close_time_12 = $close_time -> format('h:i a'); 
-          }else{
-            $close_time_12 = "00:00 PM";
-          } 
-         ?>
-        <tr class="border-t">
-          <td class="px-4 py-2 text-center"><?= $court['id'] ?></td>
-          <td class="px-4 py-2 text-center"><?= htmlspecialchars($court['name']) ?></td>
-          <td class="px-4 py-2 text-center"><?= htmlspecialchars($court['location']) ?></td>
-          <td class="px-4 py-2 text-center">P<?= number_format($court['price'], 2) ?></td>
-          <td class="px-4 py-2 text-center"><?= htmlspecialchars($court['type'] ?? '') ?></td>
-          <td class="px-4 py-2 text-center"><?= htmlspecialchars($open_time_12 ?? '') . '-' .htmlspecialchars($close_time_12 ?? '');  ?></td>
-          <td class="px-4 py-2 text-center">
-            <?php if ($court['image_path']): ?>
-              <img src="images/courts/<?= htmlspecialchars($court['image_path']) ?>" class="h-12 rounded" alt="Court image">
-            <?php else: ?>
-              No image
-            <?php endif; ?>
-          </td>
-          <td class="px-4 py-2 space-x-2 text-center">
-            <button class="text-blue-600" onclick="editCourt(<?= htmlspecialchars(json_encode($court)) ?>)"><i class="fas fa-edit"></i></button>
-            <button class="text-red-600" onclick="deleteCourt(<?= $court['id'] ?>)"><i class="fas fa-trash"></i></button>
-          </td>
-        </tr>
-        <?php endforeach; ?>
-        <?php } ?>
-      </tbody>
-    </table>
+        <button type="submit" class="admin-secondary-btn">Apply Filter</button>
+      </form>
+
+      <button onclick="openCourtModal()" class="admin-primary-btn" type="button">
+        <i class="fas fa-plus"></i>
+        Add New Court
+      </button>
+    </div>
+
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Location</th>
+            <th>Rate</th>
+            <th>Sport</th>
+            <th>Business Hours</th>
+            <th>Image</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($courts as $court): ?>
+            <?php
+            $openTime = !empty($court['open_time']) ? DateTime::createFromFormat('H:i:s', (string) $court['open_time']) : null;
+            $closeTime = !empty($court['close_time']) ? DateTime::createFromFormat('H:i:s', (string) $court['close_time']) : null;
+            $openLabel = $openTime instanceof DateTime ? $openTime->format('h:i A') : 'N/A';
+            $closeLabel = $closeTime instanceof DateTime ? $closeTime->format('h:i A') : 'N/A';
+            ?>
+            <tr>
+              <td><?= (int) $court['id'] ?></td>
+              <td><?= htmlspecialchars((string) $court['name']) ?></td>
+              <td><?= htmlspecialchars((string) $court['location']) ?></td>
+              <td>P<?= number_format((float) $court['price'], 2) ?></td>
+              <td>
+                <span class="admin-tag bg-teal-50 text-teal-700"><?= htmlspecialchars(ucfirst((string) ($court['type'] ?? ''))) ?></span>
+              </td>
+              <td><?= htmlspecialchars($openLabel . ' - ' . $closeLabel) ?></td>
+              <td>
+                <?php if (!empty($court['image_path'])): ?>
+                  <img src="images/courts/<?= htmlspecialchars((string) $court['image_path']) ?>" class="h-12 w-16 rounded-xl object-cover" alt="Court image">
+                <?php else: ?>
+                  <span class="text-sm text-slate-500">No image</span>
+                <?php endif; ?>
+              </td>
+              <td>
+                <div class="flex items-center gap-3">
+                  <button class="admin-action-link" onclick='editCourt(<?= json_encode($court) ?>)' type="button"><i class="fas fa-edit"></i></button>
+                  <button class="text-red-500 hover:text-red-700" onclick="deleteCourt(<?= (int) $court['id'] ?>)" type="button"><i class="fas fa-trash"></i></button>
+                </div>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
   </div>
 
-  <!-- Modal (basic skeleton, JS will fill in details) -->
-  <div id="courtModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-    <div class="bg-white p-6 rounded w-full max-w-lg">
-      <h2 class="text-xl font-semibold mb-4" id="modalTitle">Add Court</h2>
-      <form id="courtForm" enctype="multipart/form-data">
-        <input type="hidden" id="courtId">
-        <div class="mb-2">
-          <label>Name</label>
-          <input type="text" id="courtName" name="name" class="w-full border px-2 py-1 rounded">
+  <div id="courtModal" class="admin-modal-backdrop hidden">
+    <div class="admin-modal-panel max-w-2xl">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <div class="admin-overline">Court Details</div>
+          <div id="modalTitle" class="admin-title text-[1.4rem]">Add Court</div>
         </div>
-        <div class="mb-2">
-          <div class="flex flex-col">
-            <label>Open At:</label>
-            <input type="time" id="open_hour" name="open_hour" class="w-full border px-2 py-1 rounded">
-            <label>Close At:</label>
-            <input type="time" id="close_hour" name="close_hour" class="w-full border px-2 py-1 rounded">
+        <button onclick="closeCourtModal()" class="rounded-xl bg-slate-100 px-3 py-2 text-slate-600 hover:bg-slate-200" type="button">
+          <i class="fas fa-xmark"></i>
+        </button>
+      </div>
+
+      <form id="courtForm" enctype="multipart/form-data" class="mt-5 grid gap-4">
+        <input type="hidden" id="courtId">
+
+        <div>
+          <label for="courtName" class="admin-field-label">Court Name</label>
+          <input type="text" id="courtName" name="name" class="admin-input">
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <label for="open_hour" class="admin-field-label">Open At</label>
+            <input type="time" id="open_hour" name="open_hour" class="admin-input">
+          </div>
+          <div>
+            <label for="close_hour" class="admin-field-label">Close At</label>
+            <input type="time" id="close_hour" name="close_hour" class="admin-input">
           </div>
         </div>
-        <div class="mb-2">
-          <label>Location</label>
-          <input type="text" id="courtLocation" name="location" class="w-full border px-2 py-1 rounded">
+
+        <div>
+          <label for="courtLocation" class="admin-field-label">Location</label>
+          <input type="text" id="courtLocation" name="location" class="admin-input">
         </div>
-        <div class="mb-2">
-          <label>Price</label>
-          <input type="number" id="courtPrice" name="price" class="w-full border px-2 py-1 rounded">
+
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <label for="courtPrice" class="admin-field-label">Hourly Rate</label>
+            <input type="number" id="courtPrice" name="price" class="admin-input" step="0.01" min="0">
+          </div>
+          <div>
+            <label for="courtType" class="admin-field-label">Sport</label>
+            <select id="courtType" name="type" class="admin-select" required>
+              <option value="" disabled selected>Select sport</option>
+              <?php foreach ($sportOptions as $sport): ?>
+                <option value="<?= htmlspecialchars((string) $sport) ?>"><?= htmlspecialchars(ucfirst(str_replace('-', ' ', (string) $sport))) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
         </div>
-        <div class="mb-2">
-        <label for="courtType" class="block font-medium mb-1">Sport</label>
-        <select id="courtType" name="type" class="w-full border px-2 py-1 rounded" required>
-            <option value="" disabled selected>Select sport</option>
-            <option value="basketball">Basketball/Volleyball</option>
-            <option value="tennis">Tennis</option>
-            <option value="swimming">Swimming</option>
-            <option value="badminton">Badminton</option>
-        </select>
+
+        <div>
+          <label for="courtImage" class="admin-field-label">Court Image</label>
+          <input type="file" name="image" id="courtImage" class="admin-input">
         </div>
-        <div class="mb-2">
-          <label>Image</label>
-          <input type="file" name="image" id="courtImage">
-        </div>
-        <div class="flex justify-end space-x-2 mt-4">
-          <button type="button" onclick="closeCourtModal()" class="px-4 py-2 bg-gray-400 text-white rounded">Cancel</button>
-          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
+
+        <div class="mt-2 flex justify-end gap-3">
+          <button type="button" onclick="closeCourtModal()" class="admin-secondary-btn">Cancel</button>
+          <button type="submit" class="admin-primary-btn">Save Court</button>
         </div>
       </form>
     </div>
@@ -184,24 +212,31 @@ $courts = $stmt->fetchAll();
       document.getElementById("courtLocation").value = court.location;
       document.getElementById("courtPrice").value = court.price;
       document.getElementById("courtType").value = court.type || "";
-      document.getElementById("courtModal").classList.remove("hidden");
       document.getElementById("open_hour").value = court.open_time;
       document.getElementById("close_hour").value = court.close_time;
+      document.getElementById("courtModal").classList.remove("hidden");
     }
 
     function deleteCourt(id) {
-      if (confirm("Are you sure you want to delete this court?")) {
-        fetch(`/api/delete_court.php?id=${id}`, { method: 'POST' })
-          .then(res => res.json())
-          .then(data => {
-            if (data.success) location.reload();
-            else alert("Error: " + data.message);
-          });
+      if (!confirm("Are you sure you want to delete this court?")) {
+        return;
       }
+
+      fetch(`/api/delete_court.php?id=${id}`, { method: "POST" })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.success) {
+            location.reload();
+            return;
+          }
+
+          alert("Error: " + data.message);
+        });
     }
 
-    document.getElementById("courtForm").addEventListener("submit", function(e) {
-      e.preventDefault();
+    document.getElementById("courtForm").addEventListener("submit", function (event) {
+      event.preventDefault();
+
       const formData = new FormData(this);
       formData.append("id", document.getElementById("courtId").value);
 
@@ -209,10 +244,14 @@ $courts = $stmt->fetchAll();
         method: "POST",
         body: formData
       })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) location.reload();
-        else alert("Error: " + data.message);
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          location.reload();
+          return;
+        }
+
+        alert("Error: " + data.message);
       });
     });
   </script>

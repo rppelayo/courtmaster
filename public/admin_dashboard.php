@@ -1,66 +1,88 @@
 <?php
 session_start();
 
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] === 'user') {
+if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
     header("Location: ../index.html");
     exit;
 }
 
-include 'chatbox.php'; 
-
+include 'chatbox.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Admin Dashboard – CourtMaster</title>
+  <title>Pickleball Admin Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/js/all.min.js" integrity="sha512-b+nQTCdtTBIRIbraqNEwsjB6UvL3UEMkXnhzd8awtCYh0Kcsjl9uEgwVFVbhoj3uu1DO1ZMacNvLoyJJiNfcvg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <link rel="stylesheet" href="styles/admin-theme.css">
 </head>
-<body class="flex bg-gray-100 h-screen">
+<body class="admin-dashboard-body">
 
-  <!-- Sidebar -->
-  <div id="sidebar" class="w-64 bg-gray-800 text-white flex flex-col transition-all duration-300">
-    <div class="p-4 flex justify-between items-center border-b border-gray-700">
-      <span id="sidebar-title" class="text-xl font-bold">CourtMaster</span>
-      <button onclick="toggleSidebar()" class="text-white focus:outline-none">
-        <i class="fas fa-bars"></i>
-      </button>
-    </div>
-    <nav class="flex-1 p-4 space-y-4">
-      <?php if ($_SESSION['role'] === 'admin') { ?>
-      <button id="menu-admin_users" onclick="loadPage('admin_users.php')" class="flex items-center w-full hover:bg-gray-700 px-3 py-2 rounded">
-        <i class="fas fa-user mr-3"></i><span class="menu-label">Users</span>
-      </button>
-      <?php } ?>
-      <button id="menu-admin_courts" onclick="loadPage('admin_courts.php')" class="flex items-center w-full hover:bg-gray-700 px-3 py-2 rounded">
-        <i class="fas fa-basketball-ball mr-3"></i><span class="menu-label">Courts</span>
-      </button>
-      <button id="menu-admin_schedules" onclick="loadPage('admin_schedules.php')" class="flex items-center w-full hover:bg-gray-700 px-3 py-2 rounded">
-        <i class="fas fa-calendar-alt mr-3"></i><span class="menu-label">Schedules</span>
-      </button>
-      <button id="menu-admin_reservations" onclick="loadPage('admin_reservations.php')" class="flex items-center w-full hover:bg-gray-700 px-3 py-2 rounded">
-        <i class="fas fa-money-bill-wave mr-3"></i><span class="menu-label">Reservations</span>
-      </button>
-      <button onclick="logout()" class="flex items-center bg-orange-500 hover:bg-orange-600 px-3 py-2 rounded text-white mt-8 w-full">
-        <i class="fas fa-sign-out-alt mr-3"></i><span class="menu-label">Logout</span>
-      </button>
-    </nav>
-  </div>
+  <div class="admin-dashboard-layout">
+    <aside id="sidebar" class="admin-sidebar w-72 flex flex-col transition-all duration-300">
+      <div class="admin-sidebar-header p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="admin-brand-mark">P</div>
+            <div id="sidebar-title">
+              <div class="admin-sidebar-title">Pickleball Admin</div>
+              <div class="admin-sidebar-copy">One venue, multiple courts</div>
+            </div>
+          </div>
+          <button onclick="toggleSidebar()" class="rounded-xl bg-white/10 px-3 py-2 text-white transition hover:bg-white/15">
+            <i class="fas fa-bars"></i>
+          </button>
+        </div>
+      </div>
 
-  <!-- Main Content -->
-  <div class="flex-1 overflow-hidden">
-     <?php if ($_SESSION['role'] === 'admin') { ?>
-      <iframe id="content-frame" src="admin_users.php" class="w-full h-full border-none"></iframe>
-    <?php } else { ?>
-      <iframe id="content-frame" src="admin_courts.php" class="w-full h-full border-none"></iframe>
-    <?php } ?>
+      <nav class="flex-1 p-4 space-y-3">
+        <div class="mb-2 px-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/60">Admin Menu</div>
+        <?php if (($_SESSION['role'] ?? '') === 'admin') { ?>
+        <button id="menu-admin_users" onclick="loadPage('admin_users.php')" class="admin-menu-btn">
+          <i class="fas fa-user"></i><span class="menu-label">Users</span>
+        </button>
+        <?php } ?>
+        <button id="menu-admin_schedules" onclick="loadPage('admin_schedules.php')" class="admin-menu-btn">
+          <i class="fas fa-calendar-alt"></i><span class="menu-label">Court Schedules</span>
+        </button>
+        <button id="menu-admin_reservations" onclick="loadPage('admin_reservations.php')" class="admin-menu-btn">
+          <i class="fas fa-receipt"></i><span class="menu-label">Reservations</span>
+        </button>
+      </nav>
+
+      <div class="p-4">
+        <button onclick="logout()" class="admin-menu-btn admin-logout-btn w-full">
+          <i class="fas fa-sign-out-alt"></i><span class="menu-label">Logout</span>
+        </button>
+      </div>
+    </aside>
+
+    <main class="admin-main">
+      <div class="admin-topbar">
+        <div class="admin-topbar-card flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div class="admin-overline">Back Office</div>
+            <div class="admin-topbar-title">Pickleball Venue Operations</div>
+            <div class="admin-topbar-copy">Manage one venue's court schedules, reservations, and staff-side activity from one place.</div>
+          </div>
+          <div class="admin-pill"><?php echo htmlspecialchars(ucfirst((string) $_SESSION['role'])); ?> Access</div>
+        </div>
+      </div>
+
+      <div class="admin-iframe-wrap">
+        <?php if (($_SESSION['role'] ?? '') === 'admin') { ?>
+          <iframe id="content-frame" src="admin_users.php" class="admin-iframe border-none"></iframe>
+        <?php } else { ?>
+          <iframe id="content-frame" src="admin_schedules.php" class="admin-iframe border-none"></iframe>
+        <?php } ?>
+      </div>
+    </main>
   </div>
 
   <script>
-
     function loadPage(page) {
-      document.getElementById('content-frame').src = page;
+      document.getElementById("content-frame").src = page;
       highlightMenu(page);
     }
 
@@ -71,15 +93,13 @@ include 'chatbox.php';
     }
 
     function highlightMenu(page) {
-      // Remove highlight from all menu buttons
-      document.querySelectorAll('nav button').forEach(btn => {
-        btn.classList.remove('bg-gray-700');
+      document.querySelectorAll("nav button").forEach((button) => {
+        button.classList.remove("admin-menu-btn-active");
       });
-      
-      // Add highlight to the current page button
-      const btn = document.getElementById('menu-' + page.replace('.php', ''));
-      if (btn) {
-        btn.classList.add('bg-gray-700');
+
+      const button = document.getElementById("menu-" + page.replace(".php", ""));
+      if (button) {
+        button.classList.add("admin-menu-btn-active");
       }
     }
 
@@ -87,22 +107,23 @@ include 'chatbox.php';
       const sidebar = document.getElementById("sidebar");
       const labels = document.querySelectorAll(".menu-label");
 
-      if (sidebar.classList.contains("w-64")) {
-        sidebar.classList.remove("w-64");
+      if (sidebar.classList.contains("w-72")) {
+        sidebar.classList.remove("w-72");
         sidebar.classList.add("w-20");
-        labels.forEach(label => label.classList.add("hidden"));
+        labels.forEach((label) => label.classList.add("hidden"));
         document.getElementById("sidebar-title").classList.add("hidden");
-      } else {
-        sidebar.classList.remove("w-20");
-        sidebar.classList.add("w-64");
-        labels.forEach(label => label.classList.remove("hidden"));
-        document.getElementById("sidebar-title").classList.remove("hidden");
+        return;
       }
+
+      sidebar.classList.remove("w-20");
+      sidebar.classList.add("w-72");
+      labels.forEach((label) => label.classList.remove("hidden"));
+      document.getElementById("sidebar-title").classList.remove("hidden");
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
-      const iframe = document.getElementById('content-frame');
-      highlightMenu(iframe.src.split('/').pop()); // get just filename
+    window.addEventListener("DOMContentLoaded", () => {
+      const iframe = document.getElementById("content-frame");
+      highlightMenu(iframe.src.split("/").pop());
     });
   </script>
 </body>

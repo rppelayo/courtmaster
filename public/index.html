@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Login</title>
+  <title>Pickleball Reservations</title>
   <script src="js/auth.js" defer></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -100,10 +100,10 @@
       <div>
         <div class="mb-8">
           <div class="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800">
-            Pickleball Reservations
+            Venue Booking
           </div>
-          <h1 class="mt-5 text-4xl font-bold text-slate-800">Book your court in minutes</h1>
-          <p class="mt-3 text-base text-slate-500">Sign in to manage bookings or continue as guest to reserve a court right away.</p>
+          <h1 class="mt-5 text-4xl font-bold text-slate-800">Welcome to your pickleball booking desk</h1>
+          <p class="mt-3 text-base text-slate-500">Sign in to manage returning-player bookings or continue as guest for a quick court reservation.</p>
         </div>
 
         <form onsubmit="handleLogin(event)" class="space-y-5">
@@ -146,22 +146,22 @@
           <div class="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-white/80 text-4xl shadow-sm">
             P
           </div>
-          <h2 class="text-3xl font-bold text-slate-800">Play brighter</h2>
+          <h2 class="text-3xl font-bold text-slate-800">Simple from first click</h2>
           <p class="mt-3 text-base text-slate-600">
-            Fast court booking, simple schedules, and a lighter experience built for pickleball players.
+            A cleaner, client-ready flow for choosing a court, picking a 1-hour slot, and confirming the reservation in minutes.
           </p>
           <div class="mt-6 grid grid-cols-3 gap-3 text-sm text-slate-700">
             <div class="rounded-2xl border border-white/80 bg-white/60 px-3 py-4">
+              <div class="text-xl font-bold text-teal-700">1</div>
+              <div class="mt-1">Choose Court</div>
+            </div>
+            <div class="rounded-2xl border border-white/80 bg-white/60 px-3 py-4">
+              <div class="text-xl font-bold text-teal-700">2</div>
+              <div class="mt-1">Pick Time</div>
+            </div>
+            <div class="rounded-2xl border border-white/80 bg-white/60 px-3 py-4">
               <div class="text-xl font-bold text-teal-700">3</div>
-              <div class="mt-1">Courts</div>
-            </div>
-            <div class="rounded-2xl border border-white/80 bg-white/60 px-3 py-4">
-              <div class="text-xl font-bold text-teal-700">1h</div>
-              <div class="mt-1">Slots</div>
-            </div>
-            <div class="rounded-2xl border border-white/80 bg-white/60 px-3 py-4">
-              <div class="text-xl font-bold text-teal-700">Easy</div>
-              <div class="mt-1">Booking</div>
+              <div class="mt-1">Confirm</div>
             </div>
           </div>
         </div>
