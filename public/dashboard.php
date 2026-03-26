@@ -198,10 +198,11 @@ $user_name = htmlspecialchars($_SESSION['user_name']);
 
   </script>
 </head>
-<body class="bg-gray-800 min-h-screen text-gray-800">
-
-  <!-- Header -->
-    <header class="bg-orange-500 text-white py-4 shadow-md">
+<body class="relative bg-no-repeat bg-cover bg-center min-h-screen text-gray-800" style="background-image: url('/images/resources/dashboard_bg_2.jpeg');">
+  <div class="absolute inset-0 bg-gray/30  z-0"></div> <!-- optional transparent overlay -->
+  <div class="relative z-10">
+    <!-- Header -->
+    <header class="bg-orange-500 bg-cover bg-center text-white py-4 shadow-md">
       <div class="container mx-auto px-4 flex items-center justify-between">
         
         <!-- Logo + Title -->
@@ -284,6 +285,6 @@ $user_name = htmlspecialchars($_SESSION['user_name']);
     </div>
   </div>
 </div>
-
+  </div>
 </body>
 </html>

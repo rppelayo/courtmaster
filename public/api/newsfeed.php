@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         // Comments
         $stmt = $pdo->prepare("
-            SELECT c.content, c.created_at, u.email AS user_email
+            SELECT c.id, c.content, c.created_at, u.email AS user_email
             FROM comments c
             JOIN users u ON c.user_id = u.id
             WHERE c.post_id = ?

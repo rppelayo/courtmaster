@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>News Feed – CourtMaster</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/js/all.min.js" integrity="sha512-b+nQTCdtTBIRIbraqNEwsjB6UvL3UEMkXnhzd8awtCYh0Kcsjl9uEgwVFVbhoj3uu1DO1ZMacNvLoyJJiNfcvg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <style>
     .tag-button {
       padding: 0.25rem 0.75rem;
@@ -64,9 +65,116 @@
     <div id="feed" class="space-y-4 mt-16"></div>
   </div>
 
+  <!-- Edit Post Modal -->
+  <div id="editPostModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-white rounded-lg p-6 w-96">
+      <h2 class="text-lg font-bold mb-2">Edit Post</h2>
+      <textarea id="editPostContent" rows="4" class="w-full p-2 border rounded mb-4"></textarea>
+      <div class="flex justify-end space-x-2">
+        <button onclick="closeEditPostModal()" class="px-4 py-2 bg-gray-300 rounded">Cancel</button>
+        <button onclick="submitEditPost()" class="px-4 py-2 bg-orange-600 text-white rounded">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Comment Modal -->
+  <div id="editCommentModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-white rounded-lg p-6 w-96">
+      <h2 class="text-lg font-bold mb-2">Edit Comment</h2>
+      <textarea id="editCommentContent" rows="3" class="w-full p-2 border rounded mb-4"></textarea>
+      <div class="flex justify-end space-x-2">
+        <button onclick="closeEditCommentModal()" class="px-4 py-2 bg-gray-300 rounded">Cancel</button>
+        <button onclick="submitEditComment()" class="px-4 py-2 bg-orange-600 text-white rounded">Save</button>
+      </div>
+    </div>
+  </div>
+
+
   <script>
+  let currentUserEmail = '';
+  let currentUserId = '';
+
+  let editingPostId = null;
+  let editingCommentId = null;
+
+  function openEditPostModal(postId, currentContent) {
+    editingPostId = postId;
+    document.getElementById('editPostContent').value = currentContent;
+    document.getElementById('editPostModal').classList.remove('hidden');
+  }
+
+  function closeEditPostModal() {
+    editingPostId = null;
+    document.getElementById('editPostModal').classList.add('hidden');
+  }
+
+  async function submitEditPost() {
+    const newContent = document.getElementById('editPostContent').value.trim();
+    if (!newContent) return alert("Post content can't be empty.");
+
+    const res = await fetch('../api/edit_post.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ post_id: editingPostId, content: newContent })
+    });
+
+    const result = await res.json();
+    if (result.success) {
+      closeEditPostModal();
+      loadFeed();
+    } else {
+      alert(result.message);
+    }
+  }
+
+  function openEditCommentModal(commentId, currentContent) {
+    editingCommentId = commentId;
+    document.getElementById('editCommentContent').value = currentContent;
+    document.getElementById('editCommentModal').classList.remove('hidden');
+  }
+
+  function closeEditCommentModal() {
+    editingCommentId = null;
+    document.getElementById('editCommentModal').classList.add('hidden');
+  }
+
+  async function submitEditComment() {
+    const newContent = document.getElementById('editCommentContent').value.trim();
+    if (!newContent) return alert("Comment can't be empty.");
+
+    const res = await fetch('../api/edit_comment.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comment_id: editingCommentId, content: newContent })
+    });
+
+    const result = await res.json();
+    if (result.success) {
+      closeEditCommentModal();
+      loadFeed();
+    } else {
+      alert(result.message);
+    }
+  }
+
+    async function fetchCurrentUser() {
+      const res = await fetch('../api/get_user.php');
+      const data = await res.json();
+
+      if (data.success) {
+        currentUserEmail = data.user_email;
+        currentUserId = data.user_id;
+      } else {
+        alert('You are not logged in.');
+        // Optionally redirect to login page:
+        // window.location.href = 'login.html';
+      }
+    }
     // Load posts on page load
-    document.addEventListener('DOMContentLoaded', loadFeed);
+    document.addEventListener('DOMContentLoaded', async () => {
+      await fetchCurrentUser();
+      loadFeed();
+    });
 
     async function loadFeed() {
       const sport = document.getElementById('sportFilter').value;
@@ -87,7 +195,12 @@
         item.innerHTML = `
             <div class="text-sm text-gray-600 mb-1">${post.user_email} • ${post.created_at}</div>
             <p class="mb-2">${post.content}</p>
-
+            ${post.user_email === currentUserEmail ? `
+              <div class="text-sm space-x-2 mt-1 mb-1">
+                <button onclick="openEditPostModal(${post.id}, \`${post.content.replace(/`/g, '\\`')}\`)" class="text-blue-500 hover:underline"><i class="fa fa-pencil"></i></button>
+                <button onclick="deletePost(${post.id})" class="text-red-500 hover:underline"><i class="fa fa-trash"></i></button>
+              </div>
+            ` : ''}
             <div class="flex items-center space-x-4 mb-2">
                 <button onclick="likePost(${post.id})" class="text-blue-600 hover:underline">
                 ❤️ Like (${post.likes})
@@ -99,9 +212,15 @@
             <div class="space-y-2 text-sm text-gray-700 ml-2">
                 ${post.comments.map(c => `
                 <div class="bg-gray-100 p-2 rounded">
-                    <span class="font-semibold">${c.user_email}</span>: ${c.content}
+                  <span class="font-semibold">${c.user_email}</span>: ${c.content}
+                  ${c.user_email === currentUserEmail ? `
+                    <span class="ml-2 text-sm">
+                      <button onclick="openEditCommentModal(${c.id}, \`${c.content.replace(/`/g, '\\`')}\`)" class="text-blue-500 hover:underline"><i class="fa fa-pencil"></i></button>
+                      <button onclick="deleteComment(${c.id})" class="text-red-500 hover:underline"><i class="fa fa-trash"></i></button>
+                    </span>
+                  ` : ''}
                 </div>
-                `).join('')}
+              `).join('')}
             </div>
 
             <!-- Add comment -->
@@ -179,6 +298,43 @@
 
         return false;
         }
+
+      function editPost(postId) {
+        alert('Edit post ' + postId);
+        // Show editable textarea or modal, send PUT request
+      }
+
+      function deletePost(postId) {
+        if (confirm('Delete this post?')) {
+          fetch('../api/delete_post.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ post_id: postId })
+          }).then(res => res.json()).then(result => {
+            if (result.success) loadFeed();
+            else alert(result.message);
+          });
+        }
+      }
+
+      function editComment(commentId) {
+        alert('Edit comment ' + commentId);
+        // Implement inline editing or modal
+      }
+
+      function deleteComment(commentId) {
+        if (confirm('Delete this comment?')) {
+          fetch('../api/delete_comment.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ comment_id: commentId })
+          }).then(res => res.json()).then(result => {
+            if (result.success) loadFeed();
+            else alert(result.message);
+          });
+        }
+      }
+
 
   </script>
 </body>
