@@ -162,7 +162,7 @@ function doReservationTimeSlotsFitCourtHours(array $timeSlots, string $openTime,
 function fetchReservationCourt(PDO $pdo, int $courtId): ?array
 {
     $statement = $pdo->prepare(
-        'SELECT id, name, type, price, open_time, close_time, owner_id FROM courts WHERE id = ? LIMIT 1'
+        'SELECT id, name, type, price, member_price, open_time, close_time, owner_id FROM courts WHERE id = ? LIMIT 1'
     );
     $statement->execute([$courtId]);
     $court = $statement->fetch(PDO::FETCH_ASSOC);
@@ -206,4 +206,3 @@ function reservationHoursPlayed(array $timeSlots): int
 {
     return count(normalizeReservationTimeSlots($timeSlots));
 }
-

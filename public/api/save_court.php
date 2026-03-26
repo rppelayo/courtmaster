@@ -13,6 +13,7 @@ $id = $_POST['id'] ?? '';
 $name = $_POST['name'] ?? '';
 $location = $_POST['location'] ?? '';
 $price = $_POST['price'] ?? '';
+$member_price = $_POST['member_price'] ?? null;
 $owner_id = $_SESSION['user_id'];
 $type = 'pickleball';
 $open_time = $_POST['open_hour'] ?? '';
@@ -26,10 +27,13 @@ if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
 }
 
 try {
+    $memberPriceValue = trim((string) $member_price);
+    $memberPriceValue = $memberPriceValue === '' ? null : $memberPriceValue;
+
     if ($id) {
         // Update existing
-        $fields = "name = ?, location = ?, price = ?, type = ?, open_time = ?, close_time = ?";
-        $params = [$name, $location, $price, $type, $open_time, $close_time];
+        $fields = "name = ?, location = ?, price = ?, member_price = ?, type = ?, open_time = ?, close_time = ?";
+        $params = [$name, $location, $price, $memberPriceValue, $type, $open_time, $close_time];
 
         if ($imagePath) {
             $fields .= ", image_path = ?";
@@ -41,8 +45,8 @@ try {
         $stmt->execute($params);
     } else {
         // Insert new
-        $stmt = $pdo->prepare("INSERT INTO courts (name, location, price, owner_id, open_time, close_time, type, image_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$name, $location, $price, $owner_id, $open_time, $close_time, $type, $imagePath]);
+        $stmt = $pdo->prepare("INSERT INTO courts (name, location, price, member_price, owner_id, open_time, close_time, type, image_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$name, $location, $price, $memberPriceValue, $owner_id, $open_time, $close_time, $type, $imagePath]);
     }
 
     echo json_encode(['success' => true]);

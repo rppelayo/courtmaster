@@ -5,6 +5,7 @@ session_start();
 header('Content-Type: application/json');
 
 require_once '../includes/db.php';
+require_once '../includes/pricing.php';
 require_once '../includes/reservation_rules.php';
 
 function updateReservationResponse(array $payload, int $statusCode = 200): void
@@ -51,7 +52,7 @@ function updateReservationCourt(PDO $pdo, array $reservation): ?array
     }
 
     $statement = $pdo->prepare(
-        'SELECT id, name, type, price, open_time, close_time, owner_id
+        'SELECT id, name, type, price, member_price, open_time, close_time, owner_id
          FROM courts
          WHERE name = ?
          ORDER BY id DESC
@@ -171,9 +172,20 @@ if (reservationTimeSlotsOverlap($pdo, (int) $court['id'], $date, $timeSlots, $re
 
 $sectionNumbers = updateReservationSectionNumbers($pdo, $reservation, $reservationId);
 $hoursPlayed = reservationHoursPlayed($timeSlots);
+$discountType = normalizePricingDiscountType((string) ($data['discount_type'] ?? ($reservation['discount_type'] ?? PRICING_DISCOUNT_NONE)));
+$processingFee = (float) ($reservation['processing_fee'] ?? 0);
+$pricing = computeReservationPricing(
+    $court,
+    $hoursPlayed,
+    [
+        'processing_fee' => $processingFee,
+        'discount_type' => $discountType,
+        'allow_member_rate' => $discountType === PRICING_DISCOUNT_MEMBER_RATE,
+    ]
+);
 $payment = (int) ($reservation['is_admin_set'] ?? 0) === 1
     ? (float) ($reservation['payment'] ?? 0)
-    : ((float) $court['price']) * $hoursPlayed;
+    : $pricing['total'];
 
 $startTime = $timeSlots[0] ?? null;
 
@@ -182,7 +194,7 @@ try {
 
     $updateStatement = $pdo->prepare(
         'UPDATE reservations
-         SET court = ?, court_id = ?, date = ?, time = ?, payment_status = ?, payment = ?, section_number = ?
+         SET court = ?, court_id = ?, date = ?, time = ?, payment_status = ?, hourly_rate = ?, subtotal = ?, discount_type = ?, discount_label = ?, discount_amount = ?, processing_fee = ?, payment = ?, section_number = ?
          WHERE id = ?'
     );
     $updateStatement->execute([
@@ -191,6 +203,12 @@ try {
         $date,
         $startTime,
         $paymentStatus,
+        (int) ($reservation['is_admin_set'] ?? 0) === 1 ? (float) ($reservation['hourly_rate'] ?? 0) : $pricing['applied_rate'],
+        (int) ($reservation['is_admin_set'] ?? 0) === 1 ? (float) ($reservation['subtotal'] ?? 0) : $pricing['subtotal'],
+        (int) ($reservation['is_admin_set'] ?? 0) === 1 ? (string) ($reservation['discount_type'] ?? PRICING_DISCOUNT_NONE) : $pricing['discount_type'],
+        (int) ($reservation['is_admin_set'] ?? 0) === 1 ? (string) ($reservation['discount_label'] ?? '') : ($pricing['discount_label'] !== '' ? $pricing['discount_label'] : null),
+        (int) ($reservation['is_admin_set'] ?? 0) === 1 ? (float) ($reservation['discount_amount'] ?? 0) : $pricing['discount_amount'],
+        (int) ($reservation['is_admin_set'] ?? 0) === 1 ? (float) ($reservation['processing_fee'] ?? 0) : $pricing['processing_fee'],
         $payment,
         $sectionNumbers[0] ?? 0,
         $reservationId,
@@ -221,6 +239,7 @@ try {
         'hours_played' => $hoursPlayed,
         'payment' => $payment,
         'time_slots' => $timeSlots,
+        'pricing' => $pricing,
     ]);
 } catch (Throwable $exception) {
     if ($pdo->inTransaction()) {

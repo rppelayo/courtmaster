@@ -72,7 +72,7 @@ if ($userRole === 'owner') {
 }
 
 $courtWhereSql = $courtWhereClauses === [] ? '' : 'WHERE ' . implode(' AND ', $courtWhereClauses);
-$courtSql = "SELECT id, name, price, open_time, close_time FROM courts {$courtWhereSql} ORDER BY name";
+$courtSql = "SELECT id, name, price, member_price, open_time, close_time FROM courts {$courtWhereSql} ORDER BY name";
 $courtStatement = $pdo->prepare($courtSql);
 $courtStatement->execute($courtParams);
 $availableCourts = $courtStatement->fetchAll(PDO::FETCH_ASSOC);
@@ -201,6 +201,7 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
       const courtSelect = document.getElementById("walk-in-court");
       const startSelect = document.getElementById("walk-in-start-time");
       const endSelect = document.getElementById("walk-in-end-time");
+      const discountSelect = document.getElementById("walk-in-discount-type");
 
       if (!courtSelect || courtSelect.options.length <= 1) {
         updateWalkInSummary();
@@ -210,6 +211,7 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
       courtSelect.addEventListener("change", populateWalkInStartTimes);
       startSelect.addEventListener("change", populateWalkInEndTimes);
       endSelect.addEventListener("change", updateWalkInSummary);
+      discountSelect.addEventListener("change", updateWalkInSummary);
 
       if (!courtSelect.value && courtSelect.options.length > 1) {
         courtSelect.selectedIndex = 1;
@@ -223,6 +225,27 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
       return courtSelect.options[courtSelect.selectedIndex] || null;
     }
 
+    function formatWalkInCurrency(value) {
+      return `P${Number(value || 0).toFixed(2)}`;
+    }
+
+    function syncWalkInDiscountOptions(selectedCourt) {
+      const discountSelect = document.getElementById("walk-in-discount-type");
+      const memberOption = discountSelect.querySelector('option[value="member_rate"]');
+      const regularRate = Number(selectedCourt?.dataset.rate || 0);
+      const memberRate = Number(selectedCourt?.dataset.memberRate || 0);
+      const hasMemberRate = selectedCourt && memberRate > 0 && memberRate < regularRate;
+
+      memberOption.disabled = !hasMemberRate;
+      memberOption.textContent = hasMemberRate
+        ? `Member Rate (${formatWalkInCurrency(memberRate)}/hr)`
+        : "Member Rate Unavailable";
+
+      if (!hasMemberRate && discountSelect.value === "member_rate") {
+        discountSelect.value = "none";
+      }
+    }
+
     function populateWalkInStartTimes() {
       const selectedCourt = getSelectedWalkInCourtOption();
       const startSelect = document.getElementById("walk-in-start-time");
@@ -234,9 +257,12 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
       endSelect.disabled = true;
 
       if (!selectedCourt || !selectedCourt.value) {
+        syncWalkInDiscountOptions(null);
         updateWalkInSummary();
         return;
       }
+
+      syncWalkInDiscountOptions(selectedCourt);
 
       const slots = buildHourlySlots(selectedCourt.dataset.openTime, selectedCourt.dataset.closeTime);
       const availableStarts = slots.filter((slot) => !isPastTimeSlot(slot));
@@ -404,16 +430,57 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
       return slotDateTime < now;
     }
 
+    function getWalkInPricing(selectedCourt, hours) {
+      const discountType = document.getElementById("walk-in-discount-type").value || "none";
+      const regularRate = Number(selectedCourt?.dataset.rate || 0);
+      const rawMemberRate = Number(selectedCourt?.dataset.memberRate || 0);
+      const memberRate = rawMemberRate > 0 ? rawMemberRate : null;
+      let appliedRate = regularRate;
+      let appliedDiscountType = "none";
+      let discountLabel = "None";
+      let discountAmount = 0;
+
+      if (hours > 0) {
+        if (discountType === "member_rate" && memberRate !== null && memberRate < regularRate) {
+          appliedRate = memberRate;
+          appliedDiscountType = "member_rate";
+          discountLabel = "Member rate";
+          discountAmount = Number(((regularRate - memberRate) * hours).toFixed(2));
+        } else if (discountType === "senior_pwd") {
+          appliedDiscountType = "senior_pwd";
+          discountLabel = "Senior/PWD 20%";
+          discountAmount = Number((regularRate * hours * 0.20).toFixed(2));
+        }
+      }
+
+      const subtotal = Number((regularRate * hours).toFixed(2));
+      const total = Number(Math.max(0, subtotal - discountAmount).toFixed(2));
+
+      return {
+        discountType: appliedDiscountType,
+        discountLabel,
+        regularRate,
+        appliedRate,
+        subtotal,
+        discountAmount,
+        total
+      };
+    }
+
     function updateWalkInSummary() {
       const selectedCourt = getSelectedWalkInCourtOption();
       const startTime = document.getElementById("walk-in-start-time").value;
       const endTime = document.getElementById("walk-in-end-time").value;
       const hoursElement = document.getElementById("walk-in-hours");
+      const rateElement = document.getElementById("walk-in-rate");
+      const discountElement = document.getElementById("walk-in-discount");
       const totalElement = document.getElementById("walk-in-total");
       const rangeElement = document.getElementById("walk-in-range");
 
       if (!selectedCourt || !selectedCourt.value || !startTime || !endTime) {
         hoursElement.textContent = "0 hours";
+        rateElement.textContent = "P0.00/hr";
+        discountElement.textContent = "None";
         totalElement.textContent = "P0.00";
         if (selectedCourt && selectedCourt.value) {
           rangeElement.textContent = `${selectedCourt.dataset.courtName || selectedCourt.textContent.trim()} | Select a time-in and time-out.`;
@@ -425,11 +492,14 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
 
       const timeOutSlots = buildReservationTimeOptions(startTime, endTime);
       const hours = timeOutSlots.length;
-      const rate = Number(selectedCourt.dataset.rate || 0);
-      const total = rate * hours;
+      const pricing = getWalkInPricing(selectedCourt, hours);
 
       hoursElement.textContent = `${hours} hour${hours === 1 ? "" : "s"}`;
-      totalElement.textContent = `P${total.toFixed(2)}`;
+      rateElement.textContent = `${formatWalkInCurrency(pricing.appliedRate)}/hr`;
+      discountElement.textContent = pricing.discountAmount > 0
+        ? `${pricing.discountLabel} (-${formatWalkInCurrency(pricing.discountAmount)})`
+        : "None";
+      totalElement.textContent = formatWalkInCurrency(pricing.total);
       rangeElement.textContent = `${selectedCourt.dataset.courtName || selectedCourt.textContent.trim()} | ${formatTo12Hour(startTime)} - ${formatTo12Hour(endTime)}`;
     }
 
@@ -455,6 +525,7 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
         date: document.getElementById("walk-in-date").value,
         start_time: document.getElementById("walk-in-start-time").value,
         end_time: document.getElementById("walk-in-end-time").value,
+        discount_type: document.getElementById("walk-in-discount-type").value,
         payment_method: document.getElementById("walk-in-payment-method").value,
         payment_status: document.getElementById("walk-in-payment-status").value,
         reservation_info: document.getElementById("walk-in-notes").value,
@@ -538,6 +609,7 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
                   value="<?php echo (int) $court['id']; ?>"
                   data-court-name="<?php echo htmlspecialchars((string) $court['name']); ?>"
                   data-rate="<?php echo htmlspecialchars((string) $court['price']); ?>"
+                  data-member-rate="<?php echo htmlspecialchars((string) ($court['member_price'] ?? '')); ?>"
                   data-open-time="<?php echo htmlspecialchars((string) $court['open_time']); ?>"
                   data-close-time="<?php echo htmlspecialchars((string) $court['close_time']); ?>"
                 >
@@ -563,6 +635,15 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
             <label for="walk-in-end-time" class="admin-field-label">Time-out</label>
             <select id="walk-in-end-time" class="admin-select" required>
               <option value="">Select time-out</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="walk-in-discount-type" class="admin-field-label">Rate / Discount</label>
+            <select id="walk-in-discount-type" class="admin-select" required>
+              <option value="none">Regular Rate</option>
+              <option value="member_rate">Member Rate Unavailable</option>
+              <option value="senior_pwd">Senior / PWD 20%</option>
             </select>
           </div>
 
@@ -607,6 +688,14 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
           <div class="admin-stat-card">
             <div class="admin-stat-label">Hours</div>
             <div id="walk-in-hours" class="admin-stat-value text-base">0 hours</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-label">Applied Rate</div>
+            <div id="walk-in-rate" class="admin-stat-value text-base">P0.00/hr</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-label">Discount</div>
+            <div id="walk-in-discount" class="admin-stat-value text-base">None</div>
           </div>
           <div class="admin-stat-card">
             <div class="admin-stat-label">Total</div>

@@ -1,290 +1,803 @@
 <?php
+declare(strict_types=1);
+
 session_start();
-if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_name'])) {
-  header("Location: index.html");
-  exit;
+require_once 'includes/db.php';
+
+if (!isset($_SESSION['user_id'])) {
+    header('Location: index.html');
+    exit;
 }
 
-include 'chatbox.php'; 
+$userId = (int) $_SESSION['user_id'];
+$statement = $pdo->prepare(
+    'SELECT id, name, full_name, email, contact_number, role
+     FROM users
+     WHERE id = ?
+     LIMIT 1'
+);
+$statement->execute([$userId]);
+$user = $statement->fetch(PDO::FETCH_ASSOC);
 
-$user_name = htmlspecialchars($_SESSION['user_name']);
+if (!is_array($user)) {
+    header('Location: index.html');
+    exit;
+}
+
+$role = (string) ($user['role'] ?? ($_SESSION['role'] ?? 'user'));
+$email = (string) ($user['email'] ?? ($_SESSION['email'] ?? ''));
+$displayName = trim((string) ($user['full_name'] ?? ''));
+if ($displayName === '') {
+    $displayName = trim((string) ($user['name'] ?? ($_SESSION['user_name'] ?? '')));
+}
+
+if ($displayName === '' && $email !== '') {
+    $displayName = explode('@', $email)[0];
+}
+
+if ($displayName === '') {
+    $displayName = 'Player';
+}
+
+$contactNumber = trim((string) ($user['contact_number'] ?? ''));
+$isMember = strtolower($role) === 'subscriber';
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>CourtMaster – Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pickleball Player Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/js/all.min.js" integrity="sha512-b+nQTCdtTBIRIbraqNEwsjB6UvL3UEMkXnhzd8awtCYh0Kcsjl9uEgwVFVbhoj3uu1DO1ZMacNvLoyJJiNfcvg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script>
-
-  let allReservations = [];
-
-  const userName = "<?php echo $user_name; ?>";
-
-     window.onload = function () {
-      document.getElementById("greeting").textContent = `Welcome back, ${userName}!`;
-      loadReservations();
-      showTab('dashboard');
-    };
-
-    function logout() {
-      fetch("api/logout.php", { method: "POST" }).then(() => {
-        window.location.href = "index.html";
-      });
+  <style>
+    :root {
+      --page-bg: #f4f8f3;
+      --surface: rgba(255, 255, 255, 0.92);
+      --border: #cfe0d8;
+      --text: #173630;
+      --muted: #607a72;
+      --primary: #0f766e;
+      --primary-strong: #0b5f58;
+      --danger: #dc2626;
+      --danger-soft: #fef2f2;
+      --success-soft: #ecfdf5;
+      --shadow: 0 24px 60px rgba(23, 54, 48, 0.12);
     }
 
-    function showTab(tab) {
-      const dashboardContent = document.getElementById("dashboard-content");
-      const iframe = document.getElementById("tab-frame");
-
-      if (tab === 'dashboard') {
-        dashboardContent.classList.remove("hidden");
-        iframe.classList.add("hidden");
-      } else {
-        dashboardContent.classList.add("hidden");
-        iframe.classList.remove("hidden");
-
-        if (tab === 'reserve') {
-          iframe.src = 'reserve.html';
-        } else if (tab === 'newsfeed') {
-          iframe.src = 'newsfeed.html';
-        } else if (tab === 'about') {
-          iframe.src = 'about.html';
-        } else if (tab === 'contact') {
-          iframe.src = 'contact.html';
-        }
-      }
-
-      // Update active tab styling
-      document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("border-b-2", "border-orange-500", "text-orange-500"));
-      document.getElementById(`tab-${tab}`).classList.add("border-b-2", "border-orange-500", "text-orange-500");
-
+    body {
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(15, 118, 110, 0.14), transparent 28%),
+        linear-gradient(180deg, #fbfdf9 0%, var(--page-bg) 100%);
+      color: var(--text);
     }
 
-    function showSubscribeTab() {
-      document.getElementById("dashboard-content").classList.add("hidden");
-      const iframe = document.getElementById("tab-frame");
-      iframe.classList.remove("hidden");
-      iframe.src = "about_subscribe.html";
-
-      // Optional: remove active tab highlight
-      document.querySelectorAll(".tab-btn").forEach(btn => 
-        btn.classList.remove("border-b-2", "border-orange-500", "text-orange-500"));
+    .page-shell {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 16px 48px;
     }
 
-
-    function loadReservations() {
-      fetch('api/my_reservations.php')
-      .then(res => res.json())
-      .then(data => {
-        allReservations = data; // store for filtering
-        renderReservations(allReservations);
-      });
+    .glass-card {
+      background: var(--surface);
+      border: 1px solid rgba(207, 224, 216, 0.92);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
     }
 
-    function renderReservations(data) {
-      const list = document.getElementById('reservation-list');
-      list.innerHTML = '';
-
-      if (!data || data.length === 0) {
-        list.innerHTML = '<li>No reservations found.</li>';
-        return;
-      }
-
-      const sportIcons = {
-        Basketball: '🏀',
-        Volleyball: '🏐',
-        Tennis: '🎾',
-        Badminton: '🏸',
-        Soccer: '⚽',
-        Default: '🎯'
-      };
-
-      data.forEach(r => {
-        const icon = sportIcons[r.sport] || sportIcons.Default;
-        const li = document.createElement('li');
-
-        const formatTo12Hour = (timeStr) => {
-          const [hour, minute] = timeStr.split(":").map(Number);
-          const ampm = hour >= 12 ? "PM" : "AM";
-          const formattedHour = (hour % 12 || 12).toString();
-          return `${formattedHour}:${minute.toString().padStart(2, "0")} ${ampm}`;
-        };
-
-        const timeArray = typeof r.time === "string" ? r.time.split(",") : [];
-        const time_str = timeArray.length > 0 
-          ? `${formatTo12Hour(timeArray[0])} - ${formatTo12Hour(timeArray[timeArray.length - 1])}` 
-          : "N/A";
-
-        li.className = 'flex justify-between items-center py-2 border-b cursor-pointer hover:bg-gray-100';
-        li.onclick = () => showReservationModal(r);
-
-        li.innerHTML = `
-          <span class="ml-3">
-            ${icon} <strong>${r.sport}</strong> at <strong>${r.court}</strong><br>
-            <small>${r.date} at ${time_str}</small>
-          </span>
-          <button onclick="event.stopPropagation(); cancelReservation(${r.id})"
-                  class="text-red-500 hover:text-red-700 text-lg mr-3">
-            <i class="fas fa-trash-alt"></i>
-          </button>
-        `;
-        list.appendChild(li);
-      });
+    .pill {
+      border: 1px solid rgba(15, 118, 110, 0.16);
+      background: #f7fcfa;
+      color: var(--primary);
     }
 
-    function filterReservations() {
-      const term = document.getElementById('reservation-search').value.toLowerCase();
-      const filtered = allReservations.filter(r =>
-        r.sport.toLowerCase().includes(term) ||
-        r.court.toLowerCase().includes(term) ||
-        r.date.includes(term)
-      );
-      renderReservations(filtered);
+    .pill-muted {
+      border-color: rgba(207, 224, 216, 0.92);
+      background: #ffffff;
+      color: var(--muted);
     }
 
-
-    function cancelReservation(id) {
-      if (!confirm("Cancel this reservation?")) return;
-
-      fetch('/api/cancel_reservation.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reservation_id: id })
-      }).then(res => res.json()).then(result => {
-        if (result.success) {
-          alert("Reservation cancelled.");
-          loadReservations();
-        } else {
-          alert("Error: " + result.message);
-        }
-      });
+    .pill-success {
+      border-color: rgba(16, 185, 129, 0.18);
+      background: var(--success-soft);
+      color: #047857;
     }
 
-    function showReservationModal(r) {
-      const modal = document.getElementById("reservation-modal");
-      const modalBody = document.getElementById("modal-body");
-
-      const formatTo12Hour = (timeStr) => {
-        const [hour, minute] = timeStr.split(":").map(Number);
-        const ampm = hour >= 12 ? "PM" : "AM";
-        const formattedHour = (hour % 12 || 12).toString();
-        return `${formattedHour}:${minute.toString().padStart(2, "0")} ${ampm}`;
-      };
-
-      const timeArray = typeof r.time === "string" ? r.time.split(",") : [];
-      const startTime = formatTo12Hour(timeArray[0]);
-      const endTime = formatTo12Hour(timeArray[timeArray.length - 1]);
-
-      const time_str = timeArray.length > 0 ? `${startTime} - ${endTime}` : "N/A";
-
-      modalBody.innerHTML = `
-        <img src="images/courts/${r.image_path || 'default.jpg'}" class="w-full rounded-lg mb-4 shadow" alt="${r.court}">
-        <p><strong>Sport:</strong> ${r.sport}</p>
-        <p><strong>Court:</strong> ${r.court}</p>
-        <p><strong>Section(s):</strong> ${r.sections === "0" ? "All" : r.sections}</p>
-        <p><strong>Date:</strong> ${r.date}</p>
-        <p><strong>Time:</strong> ${time_str}</p>
-      `;
-      modal.classList.remove("hidden");
-    }
-    function closeModal() {
-      document.getElementById("reservation-modal").classList.add("hidden");
+    .primary-button {
+      background: var(--primary);
+      color: #ffffff;
+      transition: background 0.2s ease, transform 0.2s ease;
     }
 
+    .primary-button:hover {
+      background: var(--primary-strong);
+      transform: translateY(-1px);
+    }
 
-  </script>
+    .secondary-button {
+      background: #eef5f2;
+      border: 1px solid var(--border);
+      color: var(--text);
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+
+    .secondary-button:hover {
+      background: #e5f0ec;
+      transform: translateY(-1px);
+    }
+
+    .danger-button {
+      background: var(--danger-soft);
+      border: 1px solid rgba(220, 38, 38, 0.12);
+      color: var(--danger);
+    }
+
+    .danger-button:hover {
+      background: #fee2e2;
+      transform: translateY(-1px);
+    }
+
+    .stat-card,
+    .reservation-card {
+      border: 1px solid rgba(207, 224, 216, 0.92);
+      background: linear-gradient(180deg, #ffffff 0%, #f7fbf9 100%);
+    }
+
+    .reservation-card:hover {
+      border-color: rgba(15, 118, 110, 0.34);
+      box-shadow: 0 16px 32px rgba(23, 54, 48, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .reservation-cover {
+      background:
+        linear-gradient(145deg, rgba(15, 118, 110, 0.92), rgba(42, 157, 143, 0.82)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent);
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+      padding: 10px 0;
+      font-size: 0.95rem;
+    }
+
+    .detail-row:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .detail-label {
+      color: var(--muted);
+    }
+
+    .detail-value {
+      text-align: right;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .modal-backdrop {
+      background: rgba(15, 23, 42, 0.58);
+      backdrop-filter: blur(4px);
+    }
+
+    .search-input {
+      border: 1px solid var(--border);
+      background: #fcfefd;
+      color: var(--text);
+    }
+
+    .search-input::placeholder {
+      color: #7d958e;
+    }
+  </style>
 </head>
-<body class="relative bg-no-repeat bg-cover bg-center min-h-screen text-gray-800" style="background-image: url('/images/resources/dashboard_bg_2.jpeg');">
-  <div class="absolute inset-0 bg-gray/30  z-0"></div> <!-- optional transparent overlay -->
-  <div class="relative z-10">
-    <!-- Header -->
-    <header class="bg-orange-500 bg-cover bg-center text-white py-4 shadow-md">
-      <div class="container mx-auto px-4 flex items-center justify-between">
-        
-        <!-- Logo + Title -->
-        <a href="">
-            <div class="flex items-center space-x-4">
-                <img src="images/resources/courtmaster-front-logo.jpg" alt="CourtMaster Logo" class="h-10 w-10 rounded-full shadow-md" />
-                <div>
-                    <h1 class="text-2xl font-bold leading-tight">CourtMaster</h1>
-                    <p class="text-sm text-white opacity-80 -mt-1">Find Your Court, Book Your Game</p>
-                 </div>
-            </div>
-        </a>
+<body>
+  <div class="page-shell">
+    <header class="glass-card rounded-[30px] px-6 py-6 md:px-8">
+      <div class="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+        <div class="max-w-3xl">
+          <div class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold uppercase tracking-[0.18em] pill">
+            Player Portal
+          </div>
+          <h1 class="mt-5 text-3xl font-bold text-slate-800 md:text-4xl">Pickleball reservations at a glance</h1>
+          <p class="mt-3 max-w-2xl text-base text-slate-500">
+            Welcome back, <?= htmlspecialchars($displayName) ?>. Book a court, review your upcoming games, and keep an eye on your member perks from one clean dashboard.
+          </p>
+          <div class="mt-5 flex flex-wrap items-center gap-3">
+            <span class="pill rounded-full px-4 py-2 text-sm font-semibold">
+              <?= htmlspecialchars($isMember ? 'Member' : 'Player') ?> Access
+            </span>
+            <span class="pill-muted rounded-full px-4 py-2 text-sm">
+              <?= htmlspecialchars($email) ?>
+            </span>
+            <?php if ($contactNumber !== ''): ?>
+              <span class="pill-muted rounded-full px-4 py-2 text-sm">
+                <?= htmlspecialchars($contactNumber) ?>
+              </span>
+            <?php endif; ?>
+          </div>
+        </div>
 
-        <div class="flex items-center space-x-3">
-          <?php if ($_SESSION['role'] === 'user') { ?>
-          <button onclick="showSubscribeTab()" class="bg-red-600 hover:bg-red-700 transition text-white px-4 py-1 rounded">
-            🎟️ Subscribe Now
-          </button> 
-          <?php } ?>
-          <button onclick="logout()" class="bg-white text-orange-600 px-4 py-1 rounded hover:bg-gray-100 transition">
-            <i class="fas fa-sign-out-alt mr-2"></i>Logout
+        <div class="flex flex-col gap-3 sm:flex-row xl:flex-col">
+          <a href="reserve.html" class="primary-button inline-flex items-center justify-center gap-3 rounded-2xl px-5 py-3 text-sm font-semibold">
+            <i class="fas fa-calendar-check"></i>
+            Book a Court
+          </a>
+          <button type="button" onclick="loadReservations()" class="secondary-button inline-flex items-center justify-center gap-3 rounded-2xl px-5 py-3 text-sm font-semibold">
+            <i class="fas fa-rotate-right"></i>
+            Refresh
+          </button>
+          <button type="button" onclick="logout()" class="secondary-button inline-flex items-center justify-center gap-3 rounded-2xl px-5 py-3 text-sm font-semibold">
+            <i class="fas fa-sign-out-alt"></i>
+            Logout
           </button>
         </div>
       </div>
     </header>
 
-
-  <!-- Tabs -->
-<nav class="bg-gray-600 shadow mt-2">
-    <div class="container mx-auto px-4 flex space-x-6 border-b">
-      <button id="tab-dashboard" class="tab-btn py-3 text-white font-medium hover:text-orange-600 transition" onclick="showTab('dashboard')">Dashboard</button>
-      <button id="tab-reserve" class="tab-btn py-3 text-white font-medium hover:text-orange-600 transition" onclick="showTab('reserve')">Reserve</button>
-      <button id="tab-newsfeed" class="tab-btn py-3 text-white font-medium hover:text-orange-600 transition" onclick="showTab('newsfeed')">News Feed</button>
-      <button id="tab-about" class="tab-btn py-3 text-white font-medium hover:text-orange-600 transition" onclick="showTab('about')">About</button>
-      <button id="tab-contact" class="tab-btn py-3 text-white font-medium hover:text-orange-600 transition" onclick="showTab('contact')">Contact Us</button>
-    </div>
-  </nav>
-
-  <!-- Main Content -->
-  <main class="container mx-auto px-4 mt-6">
-
-    <!-- Dashboard Section -->
-    <div id="dashboard-content" class="space-y-6">
-      <div class="bg-gray-900 rounded-xl shadow p-6">
-        <h2 id="greeting" class="text-xl font-semibold mb-4 text-orange-600">Welcome back!</h2>
-
-        <div class="bg-gray-800 p-4 rounded-lg shadow">
-          <h3 class="text-lg font-medium mb-2 text-orange-500">Upcoming Reservations</h3>
-          <input type="text" id="reservation-search" placeholder="Search reservations..." 
-            class="mb-4 w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-orange-400" 
-            oninput="filterReservations()" />
-
-          <ul id="reservation-list" class="text-sm text-gray-600 space-y-1">
-            <li>Loading reservations...</li>
-          </ul>
-        </div>
+    <section class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div class="stat-card rounded-[24px] px-5 py-5">
+        <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Membership</div>
+        <div id="stat-membership" class="mt-3 text-2xl font-bold text-slate-800"><?= htmlspecialchars($isMember ? 'Active Member' : 'Standard Player') ?></div>
+        <p class="mt-2 text-sm text-slate-500">
+          <?= htmlspecialchars($isMember ? 'Member pricing is active on eligible courts.' : 'Book anytime and ask the venue about member rates.') ?>
+        </p>
       </div>
-    </div>
 
-    <!-- Iframe Container -->
-    <iframe id="tab-frame" name="tab-frame" class="hidden w-full h-[1000px] border rounded-xl shadow" src=""></iframe>
-  </main>
-  <style>
-    .tab-btn.active {
-      border-bottom-width: 2px;
-      border-color: #F97316; /* orange-500 */
-      color: #F97316;
+      <div class="stat-card rounded-[24px] px-5 py-5">
+        <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Upcoming Bookings</div>
+        <div id="stat-upcoming-count" class="mt-3 text-2xl font-bold text-slate-800">0</div>
+        <p class="mt-2 text-sm text-slate-500">Future reservations in your account.</p>
+      </div>
+
+      <div class="stat-card rounded-[24px] px-5 py-5">
+        <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Reserved Hours</div>
+        <div id="stat-total-hours" class="mt-3 text-2xl font-bold text-slate-800">0</div>
+        <p class="mt-2 text-sm text-slate-500">Total hours across the current reservation list.</p>
+      </div>
+
+      <div class="stat-card rounded-[24px] px-5 py-5">
+        <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Next Booking</div>
+        <div id="stat-next-booking" class="mt-3 text-lg font-bold text-slate-800">No upcoming booking</div>
+        <p id="stat-next-subtitle" class="mt-2 text-sm text-slate-500">Book a court to see it here.</p>
+      </div>
+    </section>
+
+    <div class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_360px]">
+      <section class="glass-card rounded-[30px] px-5 py-5 md:px-6">
+        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">My Reservations</div>
+            <h2 class="mt-1 text-2xl font-bold text-slate-800">Upcoming games and booking history</h2>
+            <p class="mt-2 text-sm text-slate-500">
+              Search by court, date, payment method, or booking source. Open any reservation for more detail or cancel it if your plans changed.
+            </p>
+          </div>
+          <div class="w-full md:max-w-sm">
+            <label for="reservation-search" class="sr-only">Search reservations</label>
+            <input
+              id="reservation-search"
+              type="text"
+              class="search-input w-full rounded-2xl px-4 py-3 text-sm"
+              placeholder="Search your reservations"
+              oninput="filterReservations()"
+            />
+          </div>
+        </div>
+
+        <div id="reservation-list" class="mt-6 grid gap-4">
+          <div class="reservation-card rounded-[24px] px-5 py-5 text-sm text-slate-500">Loading reservations...</div>
+        </div>
+      </section>
+
+      <aside class="space-y-6">
+        <section class="glass-card rounded-[30px] px-5 py-5">
+          <div class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Quick Actions</div>
+          <div class="mt-4 grid gap-3">
+            <a href="reserve.html" class="primary-button inline-flex items-center justify-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold">
+              <i class="fas fa-plus-circle"></i>
+              New Reservation
+            </a>
+            <button type="button" onclick="scrollToReservations()" class="secondary-button inline-flex items-center justify-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold">
+              <i class="fas fa-list-ul"></i>
+              Review My Bookings
+            </button>
+          </div>
+        </section>
+
+        <section class="glass-card rounded-[30px] px-5 py-5">
+          <div class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Account Snapshot</div>
+          <div class="mt-4 space-y-3">
+            <div class="rounded-2xl bg-slate-50 px-4 py-4">
+              <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Name</div>
+              <div class="mt-2 text-base font-semibold text-slate-800"><?= htmlspecialchars($displayName) ?></div>
+            </div>
+            <div class="rounded-2xl bg-slate-50 px-4 py-4">
+              <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Role</div>
+              <div class="mt-2 text-base font-semibold text-slate-800"><?= htmlspecialchars(ucfirst($role)) ?></div>
+            </div>
+            <div class="rounded-2xl bg-slate-50 px-4 py-4">
+              <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Contact</div>
+              <div class="mt-2 text-base font-semibold text-slate-800"><?= htmlspecialchars($contactNumber !== '' ? $contactNumber : 'Not set') ?></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="glass-card rounded-[30px] px-5 py-5">
+          <div class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700"><?= htmlspecialchars($isMember ? 'Member Benefits' : 'Booking Tips') ?></div>
+          <div class="mt-4 space-y-3 text-sm text-slate-600">
+            <?php if ($isMember): ?>
+              <div class="pill-success rounded-2xl px-4 py-4">
+                Member pricing is applied automatically whenever a court has a lower member rate.
+              </div>
+              <div class="rounded-2xl bg-slate-50 px-4 py-4">
+                Your processing fee is reduced during online bookings, and eligible courts show the member rate on the booking page.
+              </div>
+            <?php else: ?>
+              <div class="rounded-2xl bg-slate-50 px-4 py-4">
+                Choose your court, pick one continuous time range, then confirm the booking on the same page.
+              </div>
+              <div class="rounded-2xl bg-slate-50 px-4 py-4">
+                Member rates appear automatically when the venue enables them. Ask the front desk if you want member access added later.
+              </div>
+            <?php endif; ?>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <div id="reservation-modal" class="modal-backdrop fixed inset-0 z-50 hidden items-center justify-center px-4">
+    <div class="glass-card w-full max-w-lg rounded-[28px] px-6 py-6">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <div class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Reservation Details</div>
+          <h3 id="modal-title" class="mt-2 text-2xl font-bold text-slate-800">Court Reservation</h3>
+        </div>
+        <button type="button" onclick="closeModal()" class="secondary-button rounded-xl px-3 py-2">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div id="modal-body" class="mt-5"></div>
+    </div>
+  </div>
+
+  <script>
+    const reservationList = document.getElementById("reservation-list");
+    const reservationModal = document.getElementById("reservation-modal");
+    const numberFormatter = new Intl.NumberFormat("en-PH", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+    let allReservations = [];
+
+    document.addEventListener("DOMContentLoaded", function () {
+      reservationList.addEventListener("click", handleReservationListClick);
+      reservationModal.addEventListener("click", function (event) {
+        if (event.target === reservationModal) {
+          closeModal();
+        }
+      });
+
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+          closeModal();
+        }
+      });
+
+      loadReservations();
+    });
+
+    function logout() {
+      fetch("api/logout.php", { method: "POST" }).finally(function () {
+        window.location.href = "index.html";
+      });
     }
-  </style>
 
-  <!-- Reservation Detail Modal -->
-<div id="reservation-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center hidden">
-  <div class="bg-white rounded-lg shadow-lg max-w-md w-full p-6 relative">
-    <button onclick="closeModal()" class="absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-xl">
-      <i class="fas fa-times"></i>
-    </button>
-    <h3 class="text-lg font-bold mb-4 text-orange-600">Reservation Details</h3>
-    <div id="modal-body" class="text-sm space-y-2 text-gray-700">
-      <!-- Filled by JS -->
-    </div>
-  </div>
-</div>
-  </div>
+    function scrollToReservations() {
+      const searchInput = document.getElementById("reservation-search");
+      searchInput.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+      searchInput.focus();
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>'\"]/g, function (character) {
+        return {
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          "'": "&#39;",
+          "\"": "&quot;"
+        }[character];
+      });
+    }
+
+    function formatCurrency(value) {
+      return `P${numberFormatter.format(Number(value) || 0)}`;
+    }
+
+    function formatDisplayDate(dateStr) {
+      if (!dateStr) {
+        return "No date";
+      }
+
+      const parsedDate = new Date(`${dateStr}T00:00:00`);
+      if (Number.isNaN(parsedDate.getTime())) {
+        return dateStr;
+      }
+
+      return parsedDate.toLocaleDateString(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric"
+      });
+    }
+
+    function normalizeTimeValue(timeStr) {
+      if (!timeStr) {
+        return "";
+      }
+
+      const parts = String(timeStr).trim().split(":");
+      if (parts.length < 2) {
+        return "";
+      }
+
+      const hour = Number(parts[0]);
+      const minute = Number(parts[1]);
+      const second = parts.length > 2 ? Number(parts[2]) : 0;
+      if ([hour, minute, second].some(function (part) { return Number.isNaN(part); })) {
+        return "";
+      }
+
+      return `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}:${second.toString().padStart(2, "0")}`;
+    }
+
+    function addOneHour(timeStr) {
+      const normalized = normalizeTimeValue(timeStr);
+      if (!normalized) {
+        return "";
+      }
+
+      const [hour, minute] = normalized.split(":").map(Number);
+      const nextHour = hour + 1;
+      return `${nextHour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}:00`;
+    }
+
+    function formatTo12Hour(timeStr) {
+      const normalized = normalizeTimeValue(timeStr);
+      if (!normalized) {
+        return "N/A";
+      }
+
+      const [hour, minute] = normalized.split(":").map(Number);
+      const suffix = hour >= 12 ? "PM" : "AM";
+      const hour12 = hour % 12 || 12;
+      return `${hour12}:${minute.toString().padStart(2, "0")} ${suffix}`;
+    }
+
+    function buildTimeRange(timeValue) {
+      const slots = String(timeValue || "")
+        .split(",")
+        .map(function (slot) { return normalizeTimeValue(slot); })
+        .filter(Boolean)
+        .sort();
+
+      if (slots.length === 0) {
+        return "Time unavailable";
+      }
+
+      const start = slots[0];
+      const end = addOneHour(slots[slots.length - 1]);
+      return `${formatTo12Hour(start)} - ${formatTo12Hour(end)}`;
+    }
+
+    function reservationHours(reservation) {
+      return String(reservation.time || "")
+        .split(",")
+        .map(function (slot) { return normalizeTimeValue(slot); })
+        .filter(Boolean)
+        .length;
+    }
+
+    function reservationStartDate(reservation) {
+      const firstSlot = String(reservation.time || "")
+        .split(",")
+        .map(function (slot) { return normalizeTimeValue(slot); })
+        .filter(Boolean)
+        .sort()[0];
+
+      if (!reservation.date || !firstSlot) {
+        return null;
+      }
+
+      const startDate = new Date(`${reservation.date}T${firstSlot}`);
+      return Number.isNaN(startDate.getTime()) ? null : startDate;
+    }
+
+    function getPaymentMethodLabel(method) {
+      if (!method) {
+        return "Not set";
+      }
+
+      if (method === "gcash-maya") {
+        return "GCash / Maya";
+      }
+
+      return method
+        .split("-")
+        .map(function (part) {
+          return part.charAt(0).toUpperCase() + part.slice(1);
+        })
+        .join(" ");
+    }
+
+    function getBookingSourceLabel(source) {
+      return source === "walk-in" ? "Walk-in" : "Advance";
+    }
+
+    function getStatusBadgeClass(status) {
+      const normalized = String(status || "pending").toLowerCase();
+      return normalized === "paid" ? "pill-success" : "pill-muted";
+    }
+
+    async function loadReservations() {
+      reservationList.innerHTML = '<div class="reservation-card rounded-[24px] px-5 py-5 text-sm text-slate-500">Loading reservations...</div>';
+
+      try {
+        const response = await fetch("api/my_reservations.php", {
+          headers: { Accept: "application/json" }
+        });
+        const result = await response.json();
+
+        if (!response.ok || !Array.isArray(result)) {
+          throw new Error("Unable to load reservations.");
+        }
+
+        allReservations = result.slice().sort(function (first, second) {
+          const firstStart = reservationStartDate(first);
+          const secondStart = reservationStartDate(second);
+          const firstTime = firstStart ? firstStart.getTime() : Number.MAX_SAFE_INTEGER;
+          const secondTime = secondStart ? secondStart.getTime() : Number.MAX_SAFE_INTEGER;
+          return firstTime - secondTime;
+        });
+
+        updateDashboardStats(allReservations);
+        renderReservations(allReservations);
+      } catch (error) {
+        console.error(error);
+        reservationList.innerHTML = '<div class="reservation-card rounded-[24px] px-5 py-5 text-sm text-red-600">We could not load your reservations right now. Please try refreshing the page.</div>';
+      }
+    }
+
+    function updateDashboardStats(reservations) {
+      const now = new Date();
+      const upcomingReservations = reservations.filter(function (reservation) {
+        const startDate = reservationStartDate(reservation);
+        return startDate instanceof Date && startDate >= now;
+      });
+      const totalHours = reservations.reduce(function (sum, reservation) {
+        return sum + reservationHours(reservation);
+      }, 0);
+
+      document.getElementById("stat-upcoming-count").textContent = String(upcomingReservations.length);
+      document.getElementById("stat-total-hours").textContent = `${totalHours} hour${totalHours === 1 ? "" : "s"}`;
+
+      if (upcomingReservations.length === 0) {
+        document.getElementById("stat-next-booking").textContent = "No upcoming booking";
+        document.getElementById("stat-next-subtitle").textContent = "Book a court to see it here.";
+        return;
+      }
+
+      const nextReservation = upcomingReservations[0];
+      document.getElementById("stat-next-booking").textContent = nextReservation.court || "Reserved court";
+      document.getElementById("stat-next-subtitle").textContent = `${formatDisplayDate(nextReservation.date)} | ${buildTimeRange(nextReservation.time)}`;
+    }
+
+    function filterReservations() {
+      const searchValue = document.getElementById("reservation-search").value.trim().toLowerCase();
+      if (searchValue === "") {
+        renderReservations(allReservations);
+        return;
+      }
+
+      const filtered = allReservations.filter(function (reservation) {
+        return [
+          reservation.court,
+          reservation.date,
+          reservation.payment_method,
+          reservation.payment_status,
+          reservation.booking_source,
+          reservation.discount_label
+        ].some(function (value) {
+          return String(value || "").toLowerCase().includes(searchValue);
+        });
+      });
+
+      renderReservations(filtered);
+    }
+
+    function renderReservations(reservations) {
+      if (!Array.isArray(reservations) || reservations.length === 0) {
+        reservationList.innerHTML = `
+          <div class="reservation-card rounded-[24px] px-6 py-8 text-center">
+            <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-teal-50 text-teal-700">
+              <i class="fas fa-calendar-plus text-xl"></i>
+            </div>
+            <h3 class="mt-4 text-lg font-semibold text-slate-800">No reservations found</h3>
+            <p class="mt-2 text-sm text-slate-500">Start with a fresh booking and your upcoming games will appear here.</p>
+            <a href="reserve.html" class="primary-button mt-5 inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold">
+              <i class="fas fa-plus-circle"></i>
+              Reserve a Court
+            </a>
+          </div>
+        `;
+        return;
+      }
+
+      reservationList.innerHTML = reservations.map(function (reservation) {
+        const statusClass = getStatusBadgeClass(reservation.payment_status);
+        const hours = reservationHours(reservation);
+        const discountMarkup = Number(reservation.discount_amount || 0) > 0
+          ? `<span class="pill-success rounded-full px-3 py-1 text-xs font-semibold">${escapeHtml(reservation.discount_label || "Discount")} saved ${escapeHtml(formatCurrency(reservation.discount_amount))}</span>`
+          : "";
+
+        return `
+          <article class="reservation-card rounded-[26px] overflow-hidden">
+            <div class="grid lg:grid-cols-[160px_minmax(0,1fr)]">
+              <div class="reservation-cover flex items-end px-5 py-5 text-white">
+                <div>
+                  <div class="text-xs font-semibold uppercase tracking-[0.2em] text-white/75">${escapeHtml(getBookingSourceLabel(reservation.booking_source))}</div>
+                  <div class="mt-2 text-2xl font-bold">${escapeHtml(reservation.court || "Court")}</div>
+                  <div class="mt-2 text-sm text-white/80">${escapeHtml(formatDisplayDate(reservation.date))}</div>
+                </div>
+              </div>
+              <div class="px-5 py-5">
+                <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="pill rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]">Pickleball</span>
+                      <span class="${statusClass} rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]">${escapeHtml(reservation.payment_status || "pending")}</span>
+                      ${discountMarkup}
+                    </div>
+                    <div class="mt-4 text-lg font-semibold text-slate-800">${escapeHtml(buildTimeRange(reservation.time))}</div>
+                    <p class="mt-2 text-sm text-slate-500">
+                      ${escapeHtml(String(hours))} hour${hours === 1 ? "" : "s"} reserved | ${escapeHtml(getPaymentMethodLabel(reservation.payment_method))} | ${escapeHtml(formatCurrency(reservation.payment || 0))}
+                    </p>
+                  </div>
+                  <div class="flex flex-col gap-3 sm:flex-row">
+                    <button type="button" class="secondary-button rounded-2xl px-4 py-3 text-sm font-semibold" data-action="view" data-id="${escapeHtml(reservation.id)}">
+                      <i class="fas fa-eye mr-2"></i>
+                      View
+                    </button>
+                    <button type="button" class="danger-button rounded-2xl px-4 py-3 text-sm font-semibold" data-action="cancel" data-id="${escapeHtml(reservation.id)}">
+                      <i class="fas fa-trash-alt mr-2"></i>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function handleReservationListClick(event) {
+      const actionButton = event.target.closest("[data-action]");
+      if (!actionButton) {
+        return;
+      }
+
+      const reservationId = Number(actionButton.dataset.id || 0);
+      if (!reservationId) {
+        return;
+      }
+
+      if (actionButton.dataset.action === "view") {
+        showReservationModal(reservationId);
+        return;
+      }
+
+      if (actionButton.dataset.action === "cancel") {
+        cancelReservation(reservationId);
+      }
+    }
+
+    function showReservationModal(reservationId) {
+      const reservation = allReservations.find(function (item) {
+        return Number(item.id) === reservationId;
+      });
+
+      if (!reservation) {
+        return;
+      }
+
+      document.getElementById("modal-title").textContent = reservation.court || "Court Reservation";
+      document.getElementById("modal-body").innerHTML = `
+        <div class="space-y-1">
+          <div class="pill rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] inline-flex">
+            ${escapeHtml(getBookingSourceLabel(reservation.booking_source))}
+          </div>
+          <div class="mt-3 text-sm text-slate-500">Reservation #${escapeHtml(reservation.id)}</div>
+        </div>
+        <div class="mt-5">
+          <div class="detail-row">
+            <span class="detail-label">Date</span>
+            <span class="detail-value">${escapeHtml(formatDisplayDate(reservation.date))}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Time</span>
+            <span class="detail-value">${escapeHtml(buildTimeRange(reservation.time))}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Duration</span>
+            <span class="detail-value">${escapeHtml(String(reservationHours(reservation)))} hour${reservationHours(reservation) === 1 ? "" : "s"}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Payment Method</span>
+            <span class="detail-value">${escapeHtml(getPaymentMethodLabel(reservation.payment_method))}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Payment Status</span>
+            <span class="detail-value">${escapeHtml(String(reservation.payment_status || "pending"))}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Subtotal</span>
+            <span class="detail-value">${escapeHtml(formatCurrency(reservation.subtotal || 0))}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Discount</span>
+            <span class="detail-value">${Number(reservation.discount_amount || 0) > 0 ? `${escapeHtml(reservation.discount_label || "Discount")} (-${escapeHtml(formatCurrency(reservation.discount_amount))})` : "None"}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Total Paid / Due</span>
+            <span class="detail-value">${escapeHtml(formatCurrency(reservation.payment || 0))}</span>
+          </div>
+        </div>
+      `;
+
+      reservationModal.classList.remove("hidden");
+      reservationModal.classList.add("flex");
+    }
+
+    function closeModal() {
+      reservationModal.classList.add("hidden");
+      reservationModal.classList.remove("flex");
+    }
+
+    async function cancelReservation(reservationId) {
+      if (!confirm("Cancel this reservation?")) {
+        return;
+      }
+
+      try {
+        const response = await fetch("api/cancel_reservation.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reservation_id: reservationId })
+        });
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || "Unable to cancel reservation.");
+        }
+
+        closeModal();
+        loadReservations();
+      } catch (error) {
+        alert(error.message || "Unable to cancel reservation.");
+      }
+    }
+  </script>
 </body>
 </html>

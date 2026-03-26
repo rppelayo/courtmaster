@@ -4,6 +4,7 @@ declare(strict_types=1);
 session_start();
 header('Content-Type: application/json');
 require_once '../includes/db.php';
+require_once '../includes/pricing.php';
 require_once '../includes/reservation_rules.php';
 
 function walkInResponse(array $payload, int $statusCode = 200): void
@@ -65,6 +66,7 @@ $startTime = trim((string) $data['start_time']);
 $endTime = trim((string) $data['end_time']);
 $paymentMethod = trim((string) $data['payment_method']);
 $paymentStatus = trim((string) ($data['payment_status'] ?? 'paid'));
+$discountType = normalizePricingDiscountType((string) ($data['discount_type'] ?? PRICING_DISCOUNT_NONE));
 $reservationInfo = trim((string) ($data['reservation_info'] ?? ''));
 $userId = (int) $_SESSION['user_id'];
 $userRole = (string) ($_SESSION['role'] ?? 'admin');
@@ -116,7 +118,15 @@ if (reservationTimeSlotsOverlap($pdo, $courtId, $date, $timeSlots)) {
 }
 
 $hoursPlayed = reservationHoursPlayed($timeSlots);
-$payment = ((float) $court['price']) * $hoursPlayed;
+$pricing = computeReservationPricing(
+    $court,
+    $hoursPlayed,
+    [
+        'processing_fee' => 0,
+        'discount_type' => $discountType,
+        'allow_member_rate' => true,
+    ]
+);
 
 try {
     $pdo->beginTransaction();
@@ -135,9 +145,15 @@ try {
             court_id,
             section_number,
             date,
+            hourly_rate,
+            subtotal,
+            discount_type,
+            discount_label,
+            discount_amount,
+            processing_fee,
             payment,
             booking_source
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
 
     $reservationStatement->execute([
@@ -153,7 +169,13 @@ try {
         $courtId,
         0,
         $date,
-        $payment,
+        $pricing['applied_rate'],
+        $pricing['subtotal'],
+        $pricing['discount_type'],
+        $pricing['discount_label'] !== '' ? $pricing['discount_label'] : null,
+        $pricing['discount_amount'],
+        $pricing['processing_fee'],
+        $pricing['total'],
         'walk-in',
     ]);
 
@@ -171,7 +193,7 @@ try {
         'INSERT INTO reservation_guests (reservation_id, guest_name, guest_contact, payment)
          VALUES (?, ?, ?, ?)'
     );
-    $guestStatement->execute([$reservationId, $customerName, $contactNumber, $payment]);
+    $guestStatement->execute([$reservationId, $customerName, $contactNumber, $pricing['total']]);
 
     $pdo->commit();
 
@@ -179,7 +201,8 @@ try {
         'success' => true,
         'reservation_id' => $reservationId,
         'hours_played' => $hoursPlayed,
-        'payment' => $payment,
+        'payment' => $pricing['total'],
+        'pricing' => $pricing,
     ]);
 } catch (Throwable $exception) {
     if ($pdo->inTransaction()) {

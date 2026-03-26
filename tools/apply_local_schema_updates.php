@@ -117,9 +117,16 @@ try {
 
     applyStatement(
         $pdo,
+        'Add courts.member_price',
+        static fn(): bool => columnExists($pdo, $dbName, 'courts', 'member_price'),
+        'ALTER TABLE courts ADD COLUMN member_price DECIMAL(10,2) NULL AFTER price'
+    );
+
+    applyStatement(
+        $pdo,
         'Add courts.owner_id',
         static fn(): bool => columnExists($pdo, $dbName, 'courts', 'owner_id'),
-        'ALTER TABLE courts ADD COLUMN owner_id INT NULL AFTER price'
+        'ALTER TABLE courts ADD COLUMN owner_id INT NULL AFTER member_price'
     );
 
     applyStatement(
@@ -173,9 +180,51 @@ try {
 
     applyStatement(
         $pdo,
+        'Add reservations.hourly_rate',
+        static fn(): bool => columnExists($pdo, $dbName, 'reservations', 'hourly_rate'),
+        'ALTER TABLE reservations ADD COLUMN hourly_rate DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER payment_method'
+    );
+
+    applyStatement(
+        $pdo,
+        'Add reservations.subtotal',
+        static fn(): bool => columnExists($pdo, $dbName, 'reservations', 'subtotal'),
+        'ALTER TABLE reservations ADD COLUMN subtotal DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER hourly_rate'
+    );
+
+    applyStatement(
+        $pdo,
+        'Add reservations.discount_type',
+        static fn(): bool => columnExists($pdo, $dbName, 'reservations', 'discount_type'),
+        "ALTER TABLE reservations ADD COLUMN discount_type VARCHAR(30) NOT NULL DEFAULT 'none' AFTER subtotal"
+    );
+
+    applyStatement(
+        $pdo,
+        'Add reservations.discount_label',
+        static fn(): bool => columnExists($pdo, $dbName, 'reservations', 'discount_label'),
+        'ALTER TABLE reservations ADD COLUMN discount_label VARCHAR(100) NULL AFTER discount_type'
+    );
+
+    applyStatement(
+        $pdo,
+        'Add reservations.discount_amount',
+        static fn(): bool => columnExists($pdo, $dbName, 'reservations', 'discount_amount'),
+        'ALTER TABLE reservations ADD COLUMN discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER discount_label'
+    );
+
+    applyStatement(
+        $pdo,
+        'Add reservations.processing_fee',
+        static fn(): bool => columnExists($pdo, $dbName, 'reservations', 'processing_fee'),
+        'ALTER TABLE reservations ADD COLUMN processing_fee DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER discount_amount'
+    );
+
+    applyStatement(
+        $pdo,
         'Add reservations.payment',
         static fn(): bool => columnExists($pdo, $dbName, 'reservations', 'payment'),
-        'ALTER TABLE reservations ADD COLUMN payment DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER payment_method'
+        'ALTER TABLE reservations ADD COLUMN payment DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER processing_fee'
     );
 
     applyStatement(
@@ -266,6 +315,33 @@ try {
 
     $pdo->exec("UPDATE reservations SET payment = 0.00 WHERE payment IS NULL");
     echo '[apply] Backfilled reservations.payment values' . PHP_EOL;
+
+    $pdo->exec(
+        'UPDATE reservations r
+         LEFT JOIN courts c ON c.id = r.court_id
+         SET r.hourly_rate = COALESCE(NULLIF(r.hourly_rate, 0.00), c.price, r.payment, 0.00)
+         WHERE r.hourly_rate = 0.00'
+    );
+    echo '[apply] Backfilled reservations.hourly_rate values' . PHP_EOL;
+
+    $pdo->exec(
+        'UPDATE reservations
+         SET subtotal = CASE
+             WHEN subtotal <> 0.00 THEN subtotal
+             WHEN payment > 0.00 THEN payment
+             ELSE 0.00
+         END'
+    );
+    echo '[apply] Backfilled reservations.subtotal values' . PHP_EOL;
+
+    $pdo->exec("UPDATE reservations SET discount_type = 'none' WHERE discount_type IS NULL OR discount_type = ''");
+    echo '[apply] Backfilled reservations.discount_type values' . PHP_EOL;
+
+    $pdo->exec("UPDATE reservations SET discount_amount = 0.00 WHERE discount_amount IS NULL");
+    echo '[apply] Backfilled reservations.discount_amount values' . PHP_EOL;
+
+    $pdo->exec("UPDATE reservations SET processing_fee = 0.00 WHERE processing_fee IS NULL");
+    echo '[apply] Backfilled reservations.processing_fee values' . PHP_EOL;
 
     $pdo->exec("UPDATE reservations SET booking_source = 'advance' WHERE booking_source IS NULL OR booking_source = ''");
     echo '[apply] Backfilled reservations.booking_source values' . PHP_EOL;

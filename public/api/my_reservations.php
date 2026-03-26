@@ -14,13 +14,22 @@ try {
     // Get all reservations with court name and image
     $stmt = $pdo->prepare("
         SELECT 
-            r.id, r.sport, r.date,
-            c.name AS court,
+            r.id,
+            r.sport,
+            r.date,
+            r.payment,
+            r.payment_method,
+            COALESCE(r.payment_status, 'pending') AS payment_status,
+            COALESCE(r.booking_source, 'advance') AS booking_source,
+            COALESCE(r.discount_label, '') AS discount_label,
+            COALESCE(r.discount_amount, 0.00) AS discount_amount,
+            COALESCE(r.subtotal, 0.00) AS subtotal,
+            COALESCE(c.name, r.court) AS court,
             c.image_path
         FROM reservations r
-        JOIN courts c ON r.court_id = c.id
+        LEFT JOIN courts c ON r.court_id = c.id
         WHERE r.user_id = ?
-        ORDER BY r.date
+        ORDER BY r.date, r.id
     ");
     $stmt->execute([$user_id]);
     $reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);

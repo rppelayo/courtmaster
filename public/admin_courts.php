@@ -60,7 +60,7 @@ $courtCount = count($courts);
             <th>ID</th>
             <th>Name</th>
             <th>Location</th>
-            <th>Rate</th>
+            <th>Rates</th>
             <th>Business Hours</th>
             <th>Image</th>
             <th>Actions</th>
@@ -78,7 +78,17 @@ $courtCount = count($courts);
               <td><?= (int) $court['id'] ?></td>
               <td><?= htmlspecialchars((string) $court['name']) ?></td>
               <td><?= htmlspecialchars((string) $court['location']) ?></td>
-              <td>P<?= number_format((float) $court['price'], 2) ?></td>
+              <td>
+                <div class="font-medium text-slate-800">Regular: P<?= number_format((float) $court['price'], 2) ?></div>
+                <div class="mt-1 text-sm text-slate-500">
+                  Member:
+                  <?php if (!empty($court['member_price'])): ?>
+                    P<?= number_format((float) $court['member_price'], 2) ?>
+                  <?php else: ?>
+                    Not set
+                  <?php endif; ?>
+                </div>
+              </td>
               <td><?= htmlspecialchars($openLabel . ' - ' . $closeLabel) ?></td>
               <td>
                 <?php if (!empty($court['image_path'])): ?>
@@ -143,6 +153,13 @@ $courtCount = count($courts);
             <input type="number" id="courtPrice" name="price" class="admin-input" step="0.01" min="0">
           </div>
           <div>
+            <label for="courtMemberPrice" class="admin-field-label">Member Rate</label>
+            <input type="number" id="courtMemberPrice" name="member_price" class="admin-input" step="0.01" min="0" placeholder="Optional member rate">
+          </div>
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
             <label class="admin-field-label">Sport</label>
             <div class="admin-input flex items-center justify-between">
               <span class="font-medium text-slate-800">Pickleball</span>
@@ -182,6 +199,7 @@ $courtCount = count($courts);
       document.getElementById("courtName").value = court.name;
       document.getElementById("courtLocation").value = court.location;
       document.getElementById("courtPrice").value = court.price;
+      document.getElementById("courtMemberPrice").value = court.member_price || "";
       document.getElementById("courtType").value = "pickleball";
       document.getElementById("open_hour").value = court.open_time;
       document.getElementById("close_hour").value = court.close_time;

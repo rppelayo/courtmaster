@@ -4,6 +4,7 @@ declare(strict_types=1);
 session_start();
 header('Content-Type: application/json');
 require_once '../includes/db.php';
+require_once '../includes/pricing.php';
 require_once '../includes/reservation_rules.php';
 
 const PAYMENT_PROOF_MAX_BYTES = 5242880;
@@ -148,7 +149,7 @@ function savePaymentProof(?array $file): ?string
 
 $data = requestData();
 
-$required = ['fullName', 'contactNumber', 'email', 'paymentMethod', 'sport', 'court', 'court_id', 'date', 'time', 'payment'];
+$required = ['fullName', 'contactNumber', 'email', 'paymentMethod', 'sport', 'court', 'court_id', 'date', 'time'];
 foreach ($required as $key) {
     if (fieldMissing($data, $key)) {
         respond(['success' => false, 'message' => "Missing required field: {$key}"], 422);
@@ -164,7 +165,6 @@ $paymentMethod = trim((string) $data['paymentMethod']);
 $sport = trim((string) $data['sport']);
 $court = trim((string) $data['court']);
 $courtId = (int) $data['court_id'];
-$payment = (float) $data['payment'];
 $date = trim((string) $data['date']);
 $timeSlots = normalizeReservationTimeSlots($data['time']);
 
@@ -211,6 +211,23 @@ if (reservationTimeSlotsOverlap($pdo, $courtId, $date, $timeSlots)) {
     respond(['success' => false, 'message' => 'One or more selected time slots are already booked.'], 409);
 }
 
+$sessionRole = (string) ($_SESSION['role'] ?? '');
+$requestedDiscountType = normalizePricingDiscountType((string) ($data['discountType'] ?? PRICING_DISCOUNT_NONE));
+if ($requestedDiscountType === PRICING_DISCOUNT_SENIOR_PWD) {
+    $requestedDiscountType = PRICING_DISCOUNT_NONE;
+}
+
+$pricing = computeReservationPricing(
+    $courtRecord,
+    reservationHoursPlayed($timeSlots),
+    [
+        'processing_fee' => pricingProcessingFeeForRole($sessionRole),
+        'discount_type' => $requestedDiscountType,
+        'allow_member_rate' => pricingRoleIsMember($sessionRole),
+        'auto_member_rate' => true,
+    ]
+);
+
 $paymentProofPath = null;
 if ($paymentMethod === 'gcash-maya') {
     $paymentProofPath = savePaymentProof($_FILES['paymentProof'] ?? null);
@@ -236,10 +253,16 @@ try {
             court_id,
             section_number,
             date,
+            hourly_rate,
+            subtotal,
+            discount_type,
+            discount_label,
+            discount_amount,
+            processing_fee,
             payment,
             payment_proof_path,
             booking_source
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
 
     $insertReservation->execute([
@@ -254,7 +277,13 @@ try {
         $courtId,
         0,
         $date,
-        $payment,
+        $pricing['applied_rate'],
+        $pricing['subtotal'],
+        $pricing['discount_type'],
+        $pricing['discount_label'] !== '' ? $pricing['discount_label'] : null,
+        $pricing['discount_amount'],
+        $pricing['processing_fee'],
+        $pricing['total'],
         $paymentProofPath,
         'advance',
     ]);
@@ -279,7 +308,7 @@ try {
         );
 
         foreach ($reservationIds as $guestReservationId) {
-            $guestStatement->execute([$guestReservationId, $fullName, $contactNumber, $payment]);
+            $guestStatement->execute([$guestReservationId, $fullName, $contactNumber, $pricing['total']]);
         }
     }
 
@@ -289,6 +318,7 @@ try {
         'success' => true,
         'to' => $email,
         'paymentProofPath' => $paymentProofPath,
+        'pricing' => $pricing,
     ]);
 } catch (Throwable $exception) {
     if ($pdo->inTransaction()) {

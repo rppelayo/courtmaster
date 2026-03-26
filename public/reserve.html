@@ -474,6 +474,10 @@
                   <span>Reservation subtotal</span>
                   <span id="fee-subtotal" class="font-semibold text-slate-800">P0.00</span>
                 </div>
+                <div id="fee-discount-row" class="hidden items-center justify-between">
+                  <span id="fee-discount-label">Discount</span>
+                  <span id="fee-discount" class="font-semibold text-emerald-700">-P0.00</span>
+                </div>
                 <div class="flex items-center justify-between">
                   <span>Processing fee</span>
                   <span id="fee-processing" class="font-semibold text-slate-800">P0.00</span>
@@ -483,6 +487,7 @@
                   <span id="fee-total-display">P0.00</span>
                 </div>
               </div>
+              <p id="fee-rate-note" class="mt-3 hidden text-xs text-emerald-700"></p>
             </div>
 
             <div class="mt-5 flex flex-col gap-3">
@@ -580,6 +585,7 @@
       sessionRole: "",
       fullName: "",
       contactNumber: "",
+      isMember: false,
       processFee: 15
     };
     const maxPaymentProofSize = 5 * 1024 * 1024;
@@ -594,6 +600,7 @@
     let selectedCourt = "";
     let selectedCourtId = "";
     let selectedCourtFee = 0;
+    let selectedCourtMemberFee = 0;
     let selectedCourtOpen = "08:00:00";
     let selectedCourtClose = "22:00:00";
     let selectedTimeSlots = new Set();
@@ -716,6 +723,7 @@
         bookingContext.sessionRole = result.role || "";
         bookingContext.fullName = result.fullName || "";
         bookingContext.contactNumber = result.contactNumber || "";
+        bookingContext.isMember = Boolean(result.isMember);
         bookingContext.processFee = Number(result.processFee || 15);
 
         prefillCheckoutFields();
@@ -956,9 +964,25 @@
 
     function getCourtCardContent(court, isSelected) {
       const rate = formatCurrency(court.price || 0);
+      const memberRateValue = Number(court.member_price || 0);
+      const hasMemberRate = memberRateValue > 0 && memberRateValue < Number(court.price || 0);
       const badgeClass = isSelected ? "status-chip status-chip-selected" : "status-chip";
       const badgeText = isSelected ? "Selected" : "Available";
       const helperText = isSelected ? "This court is ready for time selection." : "Tap to choose this court.";
+      const rateMarkup = hasMemberRate
+        ? `
+          <div class="rounded-2xl bg-teal-50 px-3 py-3 font-semibold text-teal-700">
+            <div>${rate} per hour</div>
+            <div class="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-teal-600">
+              Member rate: ${formatCurrency(memberRateValue)} per hour
+            </div>
+          </div>
+        `
+        : `
+          <div class="rounded-2xl bg-teal-50 px-3 py-3 font-semibold text-teal-700">
+            ${rate} per hour
+          </div>
+        `;
 
       return `
         <div class="flex items-start justify-between gap-3">
@@ -972,9 +996,7 @@
           <div class="rounded-2xl bg-slate-50 px-3 py-3 text-slate-700">
             Hours: ${formatTo12Hour(court.open_time || "08:00:00")} - ${formatTo12Hour(court.close_time || "22:00:00")}
           </div>
-          <div class="rounded-2xl bg-teal-50 px-3 py-3 font-semibold text-teal-700">
-            ${rate} per hour
-          </div>
+          ${rateMarkup}
         </div>
       `;
     }
@@ -999,6 +1021,7 @@
       selectedCourtOpen = court.open_time || "08:00:00";
       selectedCourtClose = court.close_time || "22:00:00";
       selectedCourtFee = court.price || 0;
+      selectedCourtMemberFee = court.member_price || 0;
       selectedTimeSlots = new Set();
       selectionAnchorTime = "";
       checkoutStepOpen = false;
@@ -1093,9 +1116,11 @@
       const selectedDate = date || document.getElementById("reservation-date").value;
       const selectedSlots = Array.from(selectedTimeSlots).sort();
       const hasSelection = Boolean(selectedCourt) && selectedSlots.length > 0;
-      const subtotal = getReservationSubtotal();
-      const processingFee = getReservationProcessingFee();
-      const totalDue = getReservationTotal();
+      const pricing = getReservationPricing();
+      const discountRow = document.getElementById("fee-discount-row");
+      const discountLabel = document.getElementById("fee-discount-label");
+      const discountAmount = document.getElementById("fee-discount");
+      const rateNote = document.getElementById("fee-rate-note");
 
       document.getElementById("checkout-time-info").textContent = hasSelection
         ? `${selectedCourt} | ${formatSelectedSlotsSummary(selectedSlots)}`
@@ -1103,25 +1128,68 @@
       document.getElementById("checkout-schedule-note").textContent = hasSelection
         ? `${formatDisplayDate(selectedDate)} • ${selectedSlots.length} hour${selectedSlots.length === 1 ? "" : "s"} selected`
         : "Your selected court, date, and schedule will appear here.";
-      document.getElementById("fee-subtotal").textContent = formatCurrency(subtotal);
-      document.getElementById("fee-processing").textContent = formatCurrency(processingFee);
-      document.getElementById("fee-total-display").textContent = formatCurrency(totalDue);
+      document.getElementById("fee-subtotal").textContent = formatCurrency(pricing.subtotal);
+      document.getElementById("fee-processing").textContent = formatCurrency(pricing.processingFee);
+      document.getElementById("fee-total-display").textContent = formatCurrency(pricing.total);
+
+      const hasDiscount = pricing.discountAmount > 0;
+      discountRow.classList.toggle("hidden", !hasDiscount);
+      discountRow.classList.toggle("flex", hasDiscount);
+      discountLabel.textContent = pricing.discountLabel || "Discount";
+      discountAmount.textContent = `-${formatCurrency(pricing.discountAmount)}`;
+
+      const showRateNote = hasSelection && pricing.discountType === "member_rate";
+      rateNote.classList.toggle("hidden", !showRateNote);
+      rateNote.textContent = showRateNote
+        ? `Member rate applied: ${formatCurrency(pricing.appliedRate)} per hour`
+        : "";
+    }
+
+    function getReservationPricing() {
+      const hours = selectedTimeSlots.size;
+      const regularRate = Number(selectedCourtFee || 0);
+      const rawMemberRate = Number(selectedCourtMemberFee || 0);
+      const memberRate = rawMemberRate > 0 ? rawMemberRate : null;
+      const processingFee = hours > 0 ? Number(bookingContext.processFee || 0) : 0;
+      let discountType = "none";
+      let discountLabel = "";
+      let discountAmount = 0;
+      let appliedRate = regularRate;
+
+      if (hours > 0 && bookingContext.isMember && memberRate !== null && memberRate < regularRate) {
+        discountType = "member_rate";
+        discountLabel = "Member rate";
+        appliedRate = memberRate;
+        discountAmount = Number(((regularRate - memberRate) * hours).toFixed(2));
+      }
+
+      const subtotal = Number((regularRate * hours).toFixed(2));
+      const total = Number(Math.max(0, subtotal - discountAmount + processingFee).toFixed(2));
+
+      return {
+        hours,
+        regularRate,
+        memberRate,
+        appliedRate,
+        subtotal,
+        discountType,
+        discountLabel,
+        discountAmount,
+        processingFee,
+        total
+      };
     }
 
     function getReservationSubtotal() {
-      return Number(selectedCourtFee || 0) * selectedTimeSlots.size;
+      return getReservationPricing().subtotal;
     }
 
     function getReservationProcessingFee() {
-      if (selectedTimeSlots.size === 0) {
-        return 0;
-      }
-
-      return Number(bookingContext.processFee || 0);
+      return getReservationPricing().processingFee;
     }
 
     function getReservationTotal() {
-      return getReservationSubtotal() + getReservationProcessingFee();
+      return getReservationPricing().total;
     }
 
     function getSlotButtonClassName(baseState, isSelected) {
@@ -1259,6 +1327,7 @@
       const selectedSlots = Array.from(selectedTimeSlots).sort();
       const date = document.getElementById("reservation-date").value;
       const confirmButton = document.getElementById("confirm-reservation-btn");
+      const pricing = getReservationPricing();
 
       if (paymentMethod === "gcash-maya") {
         if (!paymentProofInput.files || paymentProofInput.files.length === 0) {
@@ -1284,7 +1353,8 @@
       formData.append("section", 0);
       formData.append("date", date);
       formData.append("time", selectedSlots.join(","));
-      formData.append("payment", getReservationTotal());
+      formData.append("payment", pricing.total);
+      formData.append("discountType", pricing.discountType);
 
       if (paymentProofInput.files && paymentProofInput.files[0]) {
         formData.append("paymentProof", paymentProofInput.files[0]);

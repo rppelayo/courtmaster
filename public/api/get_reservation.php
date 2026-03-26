@@ -79,7 +79,7 @@ function findCourtForReservation(PDO $pdo, array $reservation): ?array
     }
 
     $statement = $pdo->prepare(
-        'SELECT id, name, type, price, open_time, close_time, owner_id
+        'SELECT id, name, type, price, member_price, open_time, close_time, owner_id
          FROM courts
          WHERE name = ?
          ORDER BY id DESC
@@ -159,6 +159,7 @@ reservationResponse([
         'id' => (int) $court['id'],
         'name' => (string) $court['name'],
         'price' => (float) $court['price'],
+        'member_price' => isset($court['member_price']) ? (float) $court['member_price'] : null,
         'open_time' => (string) $court['open_time'],
         'close_time' => (string) $court['close_time'],
     ],

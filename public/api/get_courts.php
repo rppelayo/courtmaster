@@ -19,6 +19,7 @@ $stmt = $pdo->prepare("
         courts.open_time, 
         courts.close_time, 
         courts.price, 
+        courts.member_price,
         courts.image_path,
         users.contact_number
     FROM courts
