@@ -38,6 +38,9 @@ include 'chatbox.php';
 
       <nav class="flex-1 p-4 space-y-3">
         <div class="mb-2 px-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/60">Admin Menu</div>
+        <button id="menu-admin_overview" onclick="loadPage('admin_overview.php')" class="admin-menu-btn">
+          <i class="fas fa-chart-line"></i><span class="menu-label">Overview</span>
+        </button>
         <?php if (($_SESSION['role'] ?? '') === 'admin') { ?>
         <button id="menu-admin_users" onclick="loadPage('admin_users.php')" class="admin-menu-btn">
           <i class="fas fa-user"></i><span class="menu-label">Users</span>
@@ -70,18 +73,14 @@ include 'chatbox.php';
           <div>
             <div class="admin-overline">Back Office</div>
             <div class="admin-topbar-title">Pickleball Venue Operations</div>
-            <div class="admin-topbar-copy">Manage one venue's courts, schedules, walk-ins, reservations, and staff-side activity from one place.</div>
+            <div class="admin-topbar-copy">Start from the live overview, then jump into courts, schedules, walk-ins, reservations, and staff-side activity from one place.</div>
           </div>
           <div class="admin-pill"><?php echo htmlspecialchars(ucfirst((string) $_SESSION['role'])); ?> Access</div>
         </div>
       </div>
 
       <div class="admin-iframe-wrap">
-        <?php if (($_SESSION['role'] ?? '') === 'admin') { ?>
-          <iframe id="content-frame" src="admin_users.php" class="admin-iframe border-none"></iframe>
-        <?php } else { ?>
-          <iframe id="content-frame" src="admin_walkin.php" class="admin-iframe border-none"></iframe>
-        <?php } ?>
+        <iframe id="content-frame" src="admin_overview.php" class="admin-iframe border-none"></iframe>
       </div>
     </main>
   </div>
