@@ -45,15 +45,33 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
           <i class="fas fa-user"></i><span class="menu-label">Users</span>
         </button>
         <?php } ?>
-        <button id="menu-admin_courts" onclick="loadPage('admin_courts.php')" class="admin-menu-btn">
-          <i class="fas fa-table-cells-large"></i><span class="menu-label">Courts</span>
-        </button>
-        <button id="menu-admin_layout" onclick="loadPage('admin_layout.php')" class="admin-menu-btn">
-          <i class="fas fa-border-all"></i><span class="menu-label">Court Layout</span>
-        </button>
-        <button id="menu-admin_schedules" onclick="loadPage('admin_schedules.php')" class="admin-menu-btn">
-          <i class="fas fa-calendar-alt"></i><span class="menu-label">Court Schedules</span>
-        </button>
+        <div id="courts-menu-group" class="admin-submenu-group">
+          <button
+            id="menu-group-courts"
+            type="button"
+            onclick="toggleCourtsMenu()"
+            class="admin-menu-btn admin-menu-group-btn"
+            aria-expanded="false"
+            aria-controls="courts-submenu"
+          >
+            <span class="admin-menu-btn-main">
+              <i class="fas fa-table-cells-large"></i><span class="menu-label">Courts</span>
+            </span>
+            <i class="fas fa-chevron-down admin-menu-chevron"></i>
+          </button>
+
+          <div id="courts-submenu" class="admin-submenu-list" role="group" aria-label="Courts submenu">
+            <button id="menu-admin_courts" onclick="loadPage('admin_courts.php')" class="admin-submenu-btn" type="button">
+              <i class="fas fa-list-ul"></i><span class="submenu-label">View All</span>
+            </button>
+            <button id="menu-admin_layout" onclick="loadPage('admin_layout.php')" class="admin-submenu-btn" type="button">
+              <i class="fas fa-border-all"></i><span class="submenu-label">Layout</span>
+            </button>
+            <button id="menu-admin_schedules" onclick="loadPage('admin_schedules.php')" class="admin-submenu-btn" type="button">
+              <i class="fas fa-calendar-alt"></i><span class="submenu-label">Schedules</span>
+            </button>
+          </div>
+        </div>
         <button id="menu-admin_walkin" onclick="loadPage('admin_walkin.php')" class="admin-menu-btn">
           <i class="fas fa-person-walking"></i><span class="menu-label">Walk-ins</span>
         </button>
@@ -94,6 +112,18 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
   </div>
 
   <script>
+    const courtMenuPages = ["admin_courts.php", "admin_layout.php", "admin_schedules.php"];
+    let currentAdminPage = "admin_overview.php";
+    let courtsMenuOpen = false;
+
+    function normalizeAdminPage(page) {
+      return String(page || "").split("?")[0];
+    }
+
+    function isCourtMenuPage(page) {
+      return courtMenuPages.includes(normalizeAdminPage(page));
+    }
+
     function cacheBustPage(page) {
       const separator = page.includes("?") ? "&" : "?";
       return `${page}${separator}v=${Date.now()}`;
@@ -110,12 +140,31 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
       });
     }
 
+    function syncCourtsMenuState(isOpen) {
+      const group = document.getElementById("courts-menu-group");
+      const button = document.getElementById("menu-group-courts");
+
+      courtsMenuOpen = Boolean(isOpen);
+      group.classList.toggle("admin-submenu-open", courtsMenuOpen);
+      button.setAttribute("aria-expanded", courtsMenuOpen ? "true" : "false");
+    }
+
     function highlightMenu(page) {
+      currentAdminPage = normalizeAdminPage(page);
+
       document.querySelectorAll("nav button").forEach((button) => {
-        button.classList.remove("admin-menu-btn-active");
+        button.classList.remove("admin-menu-btn-active", "admin-submenu-btn-active", "admin-menu-group-active");
       });
 
-      const button = document.getElementById("menu-" + page.replace(".php", ""));
+      if (isCourtMenuPage(currentAdminPage)) {
+        document.getElementById("menu-group-courts")?.classList.add("admin-menu-group-active");
+        document.getElementById("menu-" + currentAdminPage.replace(".php", ""))?.classList.add("admin-submenu-btn-active");
+        syncCourtsMenuState(!document.getElementById("sidebar").classList.contains("admin-sidebar-collapsed"));
+        return;
+      }
+
+      syncCourtsMenuState(false);
+      const button = document.getElementById("menu-" + currentAdminPage.replace(".php", ""));
       if (button) {
         button.classList.add("admin-menu-btn-active");
       }
@@ -143,6 +192,12 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
       if (sidebarLockedOnMobile()) {
         syncSidebarCollapsedState(true);
       }
+
+      highlightMenu(currentAdminPage);
+    }
+
+    function toggleCourtsMenu() {
+      syncCourtsMenuState(!courtsMenuOpen);
     }
 
     function toggleSidebar() {
@@ -154,10 +209,12 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
       const sidebar = document.getElementById("sidebar");
       if (sidebar.classList.contains("w-72")) {
         syncSidebarCollapsedState(true);
+        highlightMenu(currentAdminPage);
         return;
       }
 
       syncSidebarCollapsedState(false);
+      highlightMenu(currentAdminPage);
     }
 
     window.addEventListener("DOMContentLoaded", () => {
@@ -166,6 +223,26 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
       iframe.src = cacheBustPage(initialPage);
       highlightMenu(initialPage);
       applyResponsiveSidebar();
+
+      document.addEventListener("click", (event) => {
+        const courtsGroup = document.getElementById("courts-menu-group");
+        const sidebar = document.getElementById("sidebar");
+        const isCollapsed = sidebar.classList.contains("admin-sidebar-collapsed");
+
+        if (!isCollapsed || !courtsMenuOpen || !courtsGroup) {
+          return;
+        }
+
+        if (!courtsGroup.contains(event.target)) {
+          syncCourtsMenuState(false);
+        }
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && courtsMenuOpen && document.getElementById("sidebar").classList.contains("admin-sidebar-collapsed")) {
+          syncCourtsMenuState(false);
+        }
+      });
     });
 
     window.addEventListener("resize", applyResponsiveSidebar);
