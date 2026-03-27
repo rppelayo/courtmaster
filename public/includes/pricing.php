@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/membership.php';
+
 const PRICING_DISCOUNT_NONE = 'none';
 const PRICING_DISCOUNT_MEMBER_RATE = 'member_rate';
 const PRICING_DISCOUNT_SENIOR_PWD = 'senior_pwd';
@@ -34,12 +36,22 @@ function pricingMemberRate(?float $memberPrice): ?float
 
 function pricingRoleIsMember(?string $role): bool
 {
-    return strtolower(trim((string) $role)) === 'subscriber';
+    return membershipLegacyRoleIsMember($role);
 }
 
 function pricingProcessingFeeForRole(?string $role): float
 {
     return pricingRoleIsMember($role) ? 7.00 : 15.00;
+}
+
+function pricingUserIsMember(?array $user): bool
+{
+    return is_array($user) && membershipIsActive($user);
+}
+
+function pricingProcessingFeeForUser(?array $user): float
+{
+    return pricingUserIsMember($user) ? 7.00 : 15.00;
 }
 
 function pricingDiscountLabel(string $discountType): string

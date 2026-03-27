@@ -8,14 +8,7 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
 }
 
 $userType = $_SESSION['role'];
-$userId = $_SESSION['user_id'];
-
-if ($userType === 'admin') {
-    $stmt = $pdo->query("SELECT * FROM courts ORDER BY name");
-} else {
-    $stmt = $pdo->prepare("SELECT * FROM courts WHERE owner_id = ? ORDER BY name");
-    $stmt->execute([$userId]);
-}
+$stmt = $pdo->query("SELECT * FROM courts ORDER BY name");
 
 $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $courtCount = count($courts);

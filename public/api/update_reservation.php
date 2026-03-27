@@ -149,12 +149,6 @@ if (!is_array($court)) {
     updateReservationResponse(['success' => false, 'message' => 'The linked court could not be found for this reservation.'], 404);
 }
 
-$userRole = (string) ($_SESSION['role'] ?? 'admin');
-$userId = (int) $_SESSION['user_id'];
-if ($userRole === 'owner' && (int) $court['owner_id'] !== $userId) {
-    updateReservationResponse(['success' => false, 'message' => 'You do not have access to this reservation.'], 403);
-}
-
 if (!doReservationTimeSlotsFitCourtHours($timeSlots, (string) $court['open_time'], (string) $court['close_time'])) {
     updateReservationResponse(['success' => false, 'message' => 'The selected time range is outside the court schedule.'], 422);
 }

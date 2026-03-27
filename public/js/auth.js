@@ -11,7 +11,7 @@ async function login(email, password) {
   
     const result = await response.json();
     if (result.success) {
-      if (result.role === 'admin' || result.role === 'owner') {
+      if (result.role === 'admin') {
         window.location.href = "admin_dashboard.php";
       } else {
         window.location.href = "dashboard.php";

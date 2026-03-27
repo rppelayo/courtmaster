@@ -36,9 +36,6 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
 $data = gameStatusRequestData();
 $reservationId = (int) ($data['id'] ?? 0);
 $requestedStatus = normalizeGameStatus((string) ($data['game_status'] ?? ''));
-$userRole = (string) ($_SESSION['role'] ?? 'admin');
-$userId = (int) $_SESSION['user_id'];
-
 if ($reservationId <= 0) {
     gameStatusResponse(['success' => false, 'message' => 'Reservation ID is required.'], 422);
 }
@@ -59,10 +56,6 @@ if (!is_array($reservation)) {
 
 if ((int) ($reservation['is_admin_set'] ?? 0) === 1) {
     gameStatusResponse(['success' => false, 'message' => 'Admin court blocks do not use game statuses.'], 422);
-}
-
-if ($userRole === 'owner' && (int) ($reservation['owner_id'] ?? 0) !== $userId) {
-    gameStatusResponse(['success' => false, 'message' => 'You do not have access to this reservation.'], 403);
 }
 
 $currentStatus = normalizeGameStatus((string) ($reservation['game_status'] ?? GAME_STATUS_RESERVED));

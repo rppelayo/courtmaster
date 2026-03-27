@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 session_start();
 require_once 'includes/db.php';
+require_once 'includes/membership.php';
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: index.html');
@@ -10,14 +11,7 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $userId = (int) $_SESSION['user_id'];
-$statement = $pdo->prepare(
-    'SELECT id, name, full_name, email, contact_number, role
-     FROM users
-     WHERE id = ?
-     LIMIT 1'
-);
-$statement->execute([$userId]);
-$user = $statement->fetch(PDO::FETCH_ASSOC);
+$user = membershipFetchUser($pdo, $userId);
 
 if (!is_array($user)) {
     header('Location: index.html');
@@ -40,7 +34,16 @@ if ($displayName === '') {
 }
 
 $contactNumber = trim((string) ($user['contact_number'] ?? ''));
-$isMember = strtolower($role) === 'subscriber';
+$membershipStatus = membershipResolveStatus($user);
+$isMember = membershipIsActive($user);
+$membershipStatusLabel = membershipStatusLabel($membershipStatus);
+$membershipStatusBadgeClass = membershipStatusBadgeClass($membershipStatus);
+$membershipPlan = trim((string) ($user['membership_plan'] ?? ''));
+$membershipPlanLabel = membershipPlanLabel($membershipPlan);
+$memberSinceLabel = membershipFormatDate((string) ($user['member_since'] ?? ''));
+$membershipExpiryRaw = trim((string) ($user['membership_expires_at'] ?? ''));
+$membershipExpiryLabel = $membershipExpiryRaw !== '' ? membershipFormatDate($membershipExpiryRaw) : 'Open-ended';
+$membershipBenefits = membershipBenefitLines((string) ($user['membership_benefits'] ?? ''), $isMember);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -209,8 +212,8 @@ $isMember = strtolower($role) === 'subscriber';
             Welcome back, <?= htmlspecialchars($displayName) ?>. Book a court, review your upcoming games, and keep an eye on your member perks from one clean dashboard.
           </p>
           <div class="mt-5 flex flex-wrap items-center gap-3">
-            <span class="pill rounded-full px-4 py-2 text-sm font-semibold">
-              <?= htmlspecialchars($isMember ? 'Member' : 'Player') ?> Access
+            <span class="rounded-full px-4 py-2 text-sm font-semibold <?= htmlspecialchars($membershipStatusBadgeClass) ?>">
+              <?= htmlspecialchars($membershipStatusLabel) ?> Membership
             </span>
             <span class="pill-muted rounded-full px-4 py-2 text-sm">
               <?= htmlspecialchars($email) ?>
@@ -243,9 +246,9 @@ $isMember = strtolower($role) === 'subscriber';
     <section class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <div class="stat-card rounded-[24px] px-5 py-5">
         <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Membership</div>
-        <div id="stat-membership" class="mt-3 text-2xl font-bold text-slate-800"><?= htmlspecialchars($isMember ? 'Active Member' : 'Standard Player') ?></div>
+        <div id="stat-membership" class="mt-3 text-2xl font-bold text-slate-800"><?= htmlspecialchars($isMember ? $membershipPlanLabel : $membershipStatusLabel) ?></div>
         <p class="mt-2 text-sm text-slate-500">
-          <?= htmlspecialchars($isMember ? 'Member pricing is active on eligible courts.' : 'Book anytime and ask the venue about member rates.') ?>
+          <?= htmlspecialchars($isMember ? 'Member pricing and perks are active on eligible bookings.' : 'Membership can be activated by the venue when you enroll.') ?>
         </p>
       </div>
 
@@ -322,6 +325,22 @@ $isMember = strtolower($role) === 'subscriber';
               <div class="mt-2 text-base font-semibold text-slate-800"><?= htmlspecialchars(ucfirst($role)) ?></div>
             </div>
             <div class="rounded-2xl bg-slate-50 px-4 py-4">
+              <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Membership Status</div>
+              <div class="mt-2 text-base font-semibold text-slate-800"><?= htmlspecialchars($membershipStatusLabel) ?></div>
+            </div>
+            <div class="rounded-2xl bg-slate-50 px-4 py-4">
+              <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Membership Plan</div>
+              <div class="mt-2 text-base font-semibold text-slate-800"><?= htmlspecialchars($membershipPlanLabel) ?></div>
+            </div>
+            <div class="rounded-2xl bg-slate-50 px-4 py-4">
+              <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Member Since</div>
+              <div class="mt-2 text-base font-semibold text-slate-800"><?= htmlspecialchars($memberSinceLabel) ?></div>
+            </div>
+            <div class="rounded-2xl bg-slate-50 px-4 py-4">
+              <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Expiry</div>
+              <div class="mt-2 text-base font-semibold text-slate-800"><?= htmlspecialchars($membershipExpiryLabel) ?></div>
+            </div>
+            <div class="rounded-2xl bg-slate-50 px-4 py-4">
               <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Contact</div>
               <div class="mt-2 text-base font-semibold text-slate-800"><?= htmlspecialchars($contactNumber !== '' ? $contactNumber : 'Not set') ?></div>
             </div>
@@ -329,21 +348,20 @@ $isMember = strtolower($role) === 'subscriber';
         </section>
 
         <section class="glass-card rounded-[30px] px-5 py-5">
-          <div class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700"><?= htmlspecialchars($isMember ? 'Member Benefits' : 'Booking Tips') ?></div>
+          <div class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700"><?= htmlspecialchars($isMember ? 'Member Benefits' : 'Membership Notes') ?></div>
           <div class="mt-4 space-y-3 text-sm text-slate-600">
             <?php if ($isMember): ?>
-              <div class="pill-success rounded-2xl px-4 py-4">
-                Member pricing is applied automatically whenever a court has a lower member rate.
-              </div>
-              <div class="rounded-2xl bg-slate-50 px-4 py-4">
-                Your processing fee is reduced during online bookings, and eligible courts show the member rate on the booking page.
-              </div>
+              <?php foreach ($membershipBenefits as $benefit): ?>
+                <div class="<?= $benefit === $membershipBenefits[0] ? 'pill-success' : 'rounded-2xl bg-slate-50' ?> rounded-2xl px-4 py-4">
+                  <?= htmlspecialchars($benefit) ?>
+                </div>
+              <?php endforeach; ?>
             <?php else: ?>
               <div class="rounded-2xl bg-slate-50 px-4 py-4">
-                Choose your court, pick one continuous time range, then confirm the booking on the same page.
+                Membership is currently <?= htmlspecialchars(strtolower($membershipStatusLabel)) ?> on this account.
               </div>
               <div class="rounded-2xl bg-slate-50 px-4 py-4">
-                Member rates appear automatically when the venue enables them. Ask the front desk if you want member access added later.
+                Ask the front desk if you want member access, plan details, or renewal help added later.
               </div>
             <?php endif; ?>
           </div>

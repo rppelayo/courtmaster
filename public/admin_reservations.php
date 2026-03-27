@@ -71,20 +71,12 @@ function adminReservationCustomer(array $reservation): string
     return 'Reservation';
 }
 
-$ownerId = (int) $_SESSION['user_id'];
 $userRole = (string) ($_SESSION['role'] ?? 'admin');
 $searchTerm = trim((string) ($_GET['search'] ?? ''));
 $params = [];
 $whereClauses = [];
 $joins = "LEFT JOIN courts c ON r.court_id = c.id
           LEFT JOIN reservation_slots rs ON rs.reservation_id = r.id";
-
-if ($userRole === 'owner') {
-    $joins = "JOIN courts c ON r.court_id = c.id
-              LEFT JOIN reservation_slots rs ON rs.reservation_id = r.id";
-    $whereClauses[] = "c.owner_id = ?";
-    $params[] = $ownerId;
-}
 
 if ($searchTerm !== '') {
     $searchLike = '%' . $searchTerm . '%';

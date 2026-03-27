@@ -6,6 +6,7 @@ header('Content-Type: application/json');
 
 require_once '../includes/db.php';
 require_once '../includes/pricing.php';
+require_once '../includes/membership.php';
 
 $defaultPayload = [
     'success' => true,
@@ -16,6 +17,11 @@ $defaultPayload = [
     'contactNumber' => '',
     'role' => '',
     'processFee' => pricingProcessingFeeForRole(null),
+    'membershipStatus' => MEMBERSHIP_STATUS_INACTIVE,
+    'membershipStatusLabel' => membershipStatusLabel(MEMBERSHIP_STATUS_INACTIVE),
+    'membershipPlan' => '',
+    'membershipExpiresAt' => '',
+    'membershipBenefits' => [],
 ];
 
 if (!isset($_SESSION['user_id'])) {
@@ -24,20 +30,24 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $userId = (int) $_SESSION['user_id'];
-$statement = $pdo->prepare('SELECT email, full_name, contact_number, role FROM users WHERE id = ? LIMIT 1');
-$statement->execute([$userId]);
-$user = $statement->fetch(PDO::FETCH_ASSOC);
+$user = membershipFetchUser($pdo, $userId);
 
 $role = (string) ($user['role'] ?? ($_SESSION['role'] ?? ''));
+$membershipStatus = is_array($user) ? membershipResolveStatus($user) : MEMBERSHIP_STATUS_INACTIVE;
 $payload = [
     'success' => true,
     'isLoggedIn' => true,
-    'isMember' => pricingRoleIsMember($role),
+    'isMember' => pricingUserIsMember($user),
     'email' => (string) ($user['email'] ?? ($_SESSION['email'] ?? '')),
     'fullName' => (string) ($user['full_name'] ?? ''),
     'contactNumber' => (string) ($user['contact_number'] ?? ''),
     'role' => $role,
-    'processFee' => pricingProcessingFeeForRole($role),
+    'processFee' => pricingProcessingFeeForUser($user),
+    'membershipStatus' => $membershipStatus,
+    'membershipStatusLabel' => membershipStatusLabel($membershipStatus),
+    'membershipPlan' => (string) ($user['membership_plan'] ?? ''),
+    'membershipExpiresAt' => (string) ($user['membership_expires_at'] ?? ''),
+    'membershipBenefits' => membershipBenefitLines((string) ($user['membership_benefits'] ?? ''), pricingUserIsMember($user)),
 ];
 
 echo json_encode($payload);

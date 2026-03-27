@@ -124,6 +124,41 @@ try {
 
     applyStatement(
         $pdo,
+        'Add users.membership_status',
+        static fn(): bool => columnExists($pdo, $dbName, 'users', 'membership_status'),
+        "ALTER TABLE users ADD COLUMN membership_status VARCHAR(20) NOT NULL DEFAULT 'inactive' AFTER role"
+    );
+
+    applyStatement(
+        $pdo,
+        'Add users.membership_plan',
+        static fn(): bool => columnExists($pdo, $dbName, 'users', 'membership_plan'),
+        'ALTER TABLE users ADD COLUMN membership_plan VARCHAR(100) NULL AFTER membership_status'
+    );
+
+    applyStatement(
+        $pdo,
+        'Add users.member_since',
+        static fn(): bool => columnExists($pdo, $dbName, 'users', 'member_since'),
+        'ALTER TABLE users ADD COLUMN member_since DATE NULL AFTER membership_plan'
+    );
+
+    applyStatement(
+        $pdo,
+        'Add users.membership_expires_at',
+        static fn(): bool => columnExists($pdo, $dbName, 'users', 'membership_expires_at'),
+        'ALTER TABLE users ADD COLUMN membership_expires_at DATE NULL AFTER member_since'
+    );
+
+    applyStatement(
+        $pdo,
+        'Add users.membership_benefits',
+        static fn(): bool => columnExists($pdo, $dbName, 'users', 'membership_benefits'),
+        'ALTER TABLE users ADD COLUMN membership_benefits TEXT NULL AFTER membership_expires_at'
+    );
+
+    applyStatement(
+        $pdo,
         'Add courts.owner_id',
         static fn(): bool => columnExists($pdo, $dbName, 'courts', 'owner_id'),
         'ALTER TABLE courts ADD COLUMN owner_id INT NULL AFTER member_price'
@@ -313,6 +348,13 @@ try {
 
     applyStatement(
         $pdo,
+        'Add index idx_users_membership_status',
+        static fn(): bool => indexExists($pdo, $dbName, 'users', 'idx_users_membership_status'),
+        'ALTER TABLE users ADD INDEX idx_users_membership_status (membership_status)'
+    );
+
+    applyStatement(
+        $pdo,
         'Add index idx_reservations_game_status',
         static fn(): bool => indexExists($pdo, $dbName, 'reservations', 'idx_reservations_game_status'),
         'ALTER TABLE reservations ADD INDEX idx_reservations_game_status (game_status)'
@@ -333,6 +375,45 @@ try {
 
     $pdo->exec("UPDATE courts SET close_time = '22:00:00' WHERE close_time IS NULL");
     echo '[apply] Backfilled missing courts.close_time values' . PHP_EOL;
+
+    $pdo->exec("UPDATE users SET membership_status = 'inactive' WHERE membership_status IS NULL OR membership_status = ''");
+    echo '[apply] Backfilled users.membership_status values' . PHP_EOL;
+
+    $pdo->exec(
+        "UPDATE users
+         SET membership_status = 'active'
+         WHERE role = 'subscriber'
+           AND membership_status = 'inactive'
+           AND membership_plan IS NULL
+           AND member_since IS NULL
+           AND membership_expires_at IS NULL
+           AND membership_benefits IS NULL"
+    );
+    echo '[apply] Backfilled legacy subscriber memberships' . PHP_EOL;
+
+    $pdo->exec(
+        "UPDATE users
+         SET membership_plan = 'Legacy Member'
+         WHERE role = 'subscriber'
+           AND membership_status = 'active'
+           AND (membership_plan IS NULL OR membership_plan = '')"
+    );
+    echo '[apply] Backfilled legacy subscriber membership plans' . PHP_EOL;
+
+    $pdo->exec(
+        "UPDATE users
+         SET member_since = CURDATE()
+         WHERE role = 'subscriber'
+           AND membership_status = 'active'
+           AND member_since IS NULL"
+    );
+    echo '[apply] Backfilled legacy subscriber member-since dates' . PHP_EOL;
+
+    $pdo->exec("UPDATE users SET role = 'admin' WHERE role = 'owner'");
+    echo '[apply] Normalized owner roles to admin' . PHP_EOL;
+
+    $pdo->exec("UPDATE users SET role = 'user' WHERE role = 'subscriber'");
+    echo '[apply] Normalized subscriber roles to user' . PHP_EOL;
 
     $pdo->exec(
         'UPDATE reservations r

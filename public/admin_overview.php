@@ -110,7 +110,6 @@ function adminOverviewDateTimeLabel(?string $value): ?string
     }
 }
 
-$ownerId = (int) $_SESSION['user_id'];
 $userRole = (string) ($_SESSION['role'] ?? 'admin');
 $today = (new DateTimeImmutable('today'))->format('Y-m-d');
 $now = new DateTimeImmutable('now');
@@ -118,10 +117,6 @@ $nowTime = $now->format('H:i:s');
 
 $courtParams = [];
 $courtWhereClauses = ["type = 'pickleball'"];
-if ($userRole === 'owner') {
-    $courtWhereClauses[] = 'owner_id = ?';
-    $courtParams[] = $ownerId;
-}
 
 $courtSql = sprintf(
     'SELECT id, name, price, member_price, open_time, close_time, owner_id
@@ -138,11 +133,6 @@ $reservationParams = [$today];
 $reservationWhereClauses = ['r.date = ?', "c.type = 'pickleball'"];
 $reservationJoinSql = "JOIN courts c ON r.court_id = c.id
                        LEFT JOIN reservation_slots rs ON rs.reservation_id = r.id";
-
-if ($userRole === 'owner') {
-    $reservationWhereClauses[] = 'c.owner_id = ?';
-    $reservationParams[] = $ownerId;
-}
 
 $reservationWhereSql = 'WHERE ' . implode(' AND ', $reservationWhereClauses);
 $reservationSql = "

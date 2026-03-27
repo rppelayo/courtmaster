@@ -5,6 +5,7 @@
 
 session_start();
 require_once "../includes/db.php";
+require_once "../includes/membership.php";
 
 if (!isset($_SESSION['user_id']) || !isset($_SESSION['email'])) {
   http_response_code(403);
@@ -16,10 +17,21 @@ $email = $_SESSION['email'];
 $name = $_SESSION['user_name'];
 $payment_method = $_POST['payment_method'] ?? '';
 
-// 1. Update role
-
-$stmt = $pdo->prepare("UPDATE users SET role = 'subscriber' WHERE id = ?");
-$stmt->execute([$user_id]);
+// 1. Update membership
+$stmt = $pdo->prepare(
+  "UPDATE users
+   SET role = 'user',
+       membership_status = ?,
+       membership_plan = COALESCE(NULLIF(membership_plan, ''), 'Venue Member'),
+       member_since = COALESCE(member_since, CURDATE()),
+       membership_benefits = COALESCE(NULLIF(membership_benefits, ''), ?)
+   WHERE id = ?"
+);
+$stmt->execute([
+  MEMBERSHIP_STATUS_ACTIVE,
+  "Member court rates on eligible bookings.\nReduced online processing fee during reservations.",
+  $user_id
+]);
 
 // 2. Prepare payment instructions
 $instructions = match ($payment_method) {

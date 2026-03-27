@@ -7,6 +7,7 @@ require_once '../includes/db.php';
 require_once '../includes/pricing.php';
 require_once '../includes/reservation_rules.php';
 require_once '../includes/game_status.php';
+require_once '../includes/membership.php';
 
 const PAYMENT_PROOF_MAX_BYTES = 5242880;
 
@@ -212,7 +213,10 @@ if (reservationTimeSlotsOverlap($pdo, $courtId, $date, $timeSlots)) {
     respond(['success' => false, 'message' => 'One or more selected time slots are already booked.'], 409);
 }
 
-$sessionRole = (string) ($_SESSION['role'] ?? '');
+$bookingUser = null;
+if (isset($_SESSION['user_id'])) {
+    $bookingUser = membershipFetchUser($pdo, (int) $_SESSION['user_id']);
+}
 $requestedDiscountType = normalizePricingDiscountType((string) ($data['discountType'] ?? PRICING_DISCOUNT_NONE));
 if ($requestedDiscountType === PRICING_DISCOUNT_SENIOR_PWD) {
     $requestedDiscountType = PRICING_DISCOUNT_NONE;
@@ -222,9 +226,9 @@ $pricing = computeReservationPricing(
     $courtRecord,
     reservationHoursPlayed($timeSlots),
     [
-        'processing_fee' => pricingProcessingFeeForRole($sessionRole),
+        'processing_fee' => pricingProcessingFeeForUser($bookingUser),
         'discount_type' => $requestedDiscountType,
-        'allow_member_rate' => pricingRoleIsMember($sessionRole),
+        'allow_member_rate' => pricingUserIsMember($bookingUser),
         'auto_member_rate' => true,
     ]
 );

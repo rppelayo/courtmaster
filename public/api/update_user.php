@@ -3,6 +3,7 @@
 session_start();
 header('Content-Type: application/json');
 require_once '../includes/db.php';
+require_once '../includes/membership.php';
 
 // Only allow admins
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
@@ -19,14 +20,43 @@ if (!isset($data['id'], $data['full_name'], $data['email'], $data['contact_numbe
     exit;
 }
 
+$membershipStatus = membershipNormalizeStatus((string) ($data['membership_status'] ?? MEMBERSHIP_STATUS_INACTIVE));
+$membershipPlan = trim((string) ($data['membership_plan'] ?? ''));
+$memberSince = trim((string) ($data['member_since'] ?? ''));
+$membershipExpiresAt = trim((string) ($data['membership_expires_at'] ?? ''));
+$membershipBenefits = trim((string) ($data['membership_benefits'] ?? ''));
+$role = strtolower(trim((string) $data['role']));
+$allowedRoles = ['user', 'admin'];
+if (!in_array($role, $allowedRoles, true)) {
+    $role = 'user';
+}
+
+if ($membershipStatus === MEMBERSHIP_STATUS_ACTIVE && $memberSince === '') {
+    $memberSince = (new DateTimeImmutable('today'))->format('Y-m-d');
+}
+
+$memberSinceValue = $memberSince !== '' ? $memberSince : null;
+$membershipExpiresValue = $membershipExpiresAt !== '' ? $membershipExpiresAt : null;
+$membershipPlanValue = $membershipPlan !== '' ? $membershipPlan : null;
+$membershipBenefitsValue = $membershipBenefits !== '' ? $membershipBenefits : null;
+
 try {
-    $stmt = $pdo->prepare("UPDATE users SET name = ?, full_name = ?, email = ?, contact_number = ?, role = ?, updated_at = NOW() WHERE id = ?");
+    $stmt = $pdo->prepare(
+        "UPDATE users
+         SET name = ?, full_name = ?, email = ?, contact_number = ?, role = ?, membership_status = ?, membership_plan = ?, member_since = ?, membership_expires_at = ?, membership_benefits = ?, updated_at = NOW()
+         WHERE id = ?"
+    );
     $stmt->execute([
         $data['name'],
         $data['full_name'],
         $data['email'],
         $data['contact_number'],
-        $data['role'],
+        $role,
+        $membershipStatus,
+        $membershipPlanValue,
+        $memberSinceValue,
+        $membershipExpiresValue,
+        $membershipBenefitsValue,
         $data['id']
     ]);
 

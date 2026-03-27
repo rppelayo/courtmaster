@@ -71,7 +71,6 @@ $gameStatus = normalizeGameStatus((string) ($data['game_status'] ?? GAME_STATUS_
 $discountType = normalizePricingDiscountType((string) ($data['discount_type'] ?? PRICING_DISCOUNT_NONE));
 $reservationInfo = trim((string) ($data['reservation_info'] ?? ''));
 $userId = (int) $_SESSION['user_id'];
-$userRole = (string) ($_SESSION['role'] ?? 'admin');
 
 $clientReference = resolveWalkInClientReference($data);
 $today = $clientReference->format('Y-m-d');
@@ -96,10 +95,6 @@ if (!in_array($paymentStatus, $allowedPaymentStatuses, true)) {
 $court = fetchReservationCourt($pdo, $courtId);
 if ($court === null) {
     walkInResponse(['success' => false, 'message' => 'Selected court was not found.'], 404);
-}
-
-if ($userRole === 'owner' && (int) $court['owner_id'] !== $userId) {
-    walkInResponse(['success' => false, 'message' => 'You do not have access to this court.'], 403);
 }
 
 $timeSlots = buildReservationTimeSlotsFromRange($startTime, $endTime);

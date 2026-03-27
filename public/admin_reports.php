@@ -137,7 +137,6 @@ function reportsInitializeSummaryRows(array $timelineKeys, string $granularity):
     return $rows;
 }
 
-$ownerId = (int) $_SESSION['user_id'];
 $userRole = (string) ($_SESSION['role'] ?? 'admin');
 $period = reportsSanitizePeriod((string) ($_GET['period'] ?? 'this_month'));
 $granularity = reportsSanitizeGranularity((string) ($_GET['granularity'] ?? 'daily'));
@@ -160,10 +159,6 @@ $rangeDays = reportsDateCount($startDateObject, $endDateObject);
 
 $courtWhereClauses = ["type = 'pickleball'"];
 $courtParams = [];
-if ($userRole === 'owner') {
-    $courtWhereClauses[] = 'owner_id = ?';
-    $courtParams[] = $ownerId;
-}
 
 $courtSql = sprintf(
     'SELECT id, name, price, member_price, open_time, close_time
@@ -189,11 +184,6 @@ $reservationWhereClauses = [
     "COALESCE(c.type, r.sport) = 'pickleball'",
     'COALESCE(r.is_admin_set, 0) = 0',
 ];
-
-if ($userRole === 'owner') {
-    $reservationWhereClauses[] = 'c.owner_id = ?';
-    $reservationParams[] = $ownerId;
-}
 
 if ($selectedCourtId > 0) {
     $reservationWhereClauses[] = 'r.court_id = ?';

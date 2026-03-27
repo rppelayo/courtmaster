@@ -61,16 +61,11 @@ function adminWalkInCustomer(array $reservation): string
     return 'Walk-in Reservation';
 }
 
-$ownerId = (int) $_SESSION['user_id'];
 $userRole = (string) ($_SESSION['role'] ?? 'admin');
 $today = (new DateTimeImmutable('today'))->format('Y-m-d');
 
 $courtWhereClauses = [];
 $courtParams = [];
-if ($userRole === 'owner') {
-    $courtWhereClauses[] = 'owner_id = ?';
-    $courtParams[] = $ownerId;
-}
 
 $courtWhereSql = $courtWhereClauses === [] ? '' : 'WHERE ' . implode(' AND ', $courtWhereClauses);
 $courtSql = "SELECT id, name, price, member_price, open_time, close_time FROM courts {$courtWhereSql} ORDER BY name";
@@ -81,11 +76,6 @@ $availableCourts = $courtStatement->fetchAll(PDO::FETCH_ASSOC);
 $summaryParams = [];
 $summaryWhereClauses = [];
 $summaryJoinSql = 'LEFT JOIN courts c ON r.court_id = c.id';
-if ($userRole === 'owner') {
-    $summaryJoinSql = 'JOIN courts c ON r.court_id = c.id';
-    $summaryWhereClauses[] = 'c.owner_id = ?';
-    $summaryParams[] = $ownerId;
-}
 
 $summaryWhereSql = $summaryWhereClauses === [] ? '' : 'WHERE ' . implode(' AND ', $summaryWhereClauses);
 $summarySql = "
@@ -121,12 +111,6 @@ $recentWalkInParams = [];
 $recentWalkInWhereClauses = ["COALESCE(r.booking_source, 'advance') = 'walk-in'"];
 $recentWalkInJoinSql = "LEFT JOIN courts c ON r.court_id = c.id
                         LEFT JOIN reservation_slots rs ON rs.reservation_id = r.id";
-if ($userRole === 'owner') {
-    $recentWalkInJoinSql = "JOIN courts c ON r.court_id = c.id
-                            LEFT JOIN reservation_slots rs ON rs.reservation_id = r.id";
-    $recentWalkInWhereClauses[] = 'c.owner_id = ?';
-    $recentWalkInParams[] = $ownerId;
-}
 
 $recentWalkInWhereSql = 'WHERE ' . implode(' AND ', $recentWalkInWhereClauses);
 $recentWalkInsSql = "

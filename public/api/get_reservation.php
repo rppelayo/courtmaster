@@ -137,12 +137,6 @@ if (!is_array($court)) {
     reservationResponse(['success' => false, 'message' => 'The linked court could not be found for this reservation.'], 404);
 }
 
-$userRole = (string) ($_SESSION['role'] ?? 'admin');
-$userId = (int) $_SESSION['user_id'];
-if ($userRole === 'owner' && (int) $court['owner_id'] !== $userId) {
-    reservationResponse(['success' => false, 'message' => 'You do not have access to this reservation.'], 403);
-}
-
 $contextDate = reservationContextDate($reservation);
 $timeSlots = reservationTimeSlotsForId($pdo, $reservationId, (string) ($reservation['time'] ?? ''));
 $courtSlots = buildCourtHourlySlots((string) $court['open_time'], (string) $court['close_time']);

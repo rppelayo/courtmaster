@@ -1,7 +1,18 @@
 <?php
 session_start();
+require_once 'includes/db.php';
+require_once 'includes/pricing.php';
+require_once 'includes/membership.php';
 $sessionEmail = $_SESSION['email'] ?? '';
 $sessionRole = $_SESSION['role'] ?? '';
+$sessionProcessFee = pricingProcessingFeeForRole($sessionRole);
+
+if (isset($_SESSION['user_id'])) {
+    $sessionUser = membershipFetchUser($pdo, (int) $_SESSION['user_id']);
+    if (is_array($sessionUser)) {
+        $sessionProcessFee = pricingProcessingFeeForUser($sessionUser);
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -455,7 +466,7 @@ $sessionRole = $_SESSION['role'] ?? '';
 
       const timeArray = typeof time === "string" && time.length > 0 ? time.split(",") : [];
       const feeValue = parseInt(fee, 10) || 0;
-      const processFee = sessionRole === "subscriber" ? 7 : 15;
+      const processFee = Number(<?= json_encode($sessionProcessFee) ?>);
       const payment = feeValue + processFee;
       const formattedDate = date ? formatDisplayDate(date) : "Not selected";
       const timeLabel = getTimeLabel(timeArray);
