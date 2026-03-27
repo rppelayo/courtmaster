@@ -8,7 +8,7 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
 }
 
 $userType = $_SESSION['role'];
-$stmt = $pdo->query("SELECT * FROM courts ORDER BY name");
+$stmt = $pdo->query("SELECT * FROM courts ORDER BY COALESCE(layout_row, 9999), COALESCE(layout_column, 9999), name");
 
 $courts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $courtCount = count($courts);
@@ -56,6 +56,7 @@ $courtCount = count($courts);
             <th>Location</th>
             <th>Rates</th>
             <th>Business Hours</th>
+            <th>Venue Position</th>
             <th>Image</th>
             <th>Actions</th>
           </tr>
@@ -84,6 +85,12 @@ $courtCount = count($courts);
                 </div>
               </td>
               <td><?= htmlspecialchars($openLabel . ' - ' . $closeLabel) ?></td>
+              <td>
+                <div class="font-medium text-slate-800">
+                  Row <?= (int) ($court['layout_row'] ?? 1) ?>, Column <?= (int) ($court['layout_column'] ?? 1) ?>
+                </div>
+                <div class="mt-1 text-sm text-slate-500">Used in the live court layout view.</div>
+              </td>
               <td>
                 <?php if (!empty($court['image_path'])): ?>
                   <img src="images/courts/<?= htmlspecialchars((string) $court['image_path']) ?>" class="h-12 w-16 rounded-xl object-cover" alt="Court image">
@@ -154,6 +161,19 @@ $courtCount = count($courts);
 
         <div class="grid gap-4 md:grid-cols-2">
           <div>
+            <label for="layoutRow" class="admin-field-label">Layout Row</label>
+            <input type="number" id="layoutRow" name="layout_row" class="admin-input" min="1" step="1" value="1">
+            <p class="mt-2 text-xs text-slate-500">Use this to place the court on the venue map from top to bottom.</p>
+          </div>
+          <div>
+            <label for="layoutColumn" class="admin-field-label">Layout Column</label>
+            <input type="number" id="layoutColumn" name="layout_column" class="admin-input" min="1" step="1" value="1">
+            <p class="mt-2 text-xs text-slate-500">Use this to place the court from left to right in the layout view.</p>
+          </div>
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
             <label class="admin-field-label">Sport</label>
             <div class="admin-input flex items-center justify-between">
               <span class="font-medium text-slate-800">Pickleball</span>
@@ -180,6 +200,8 @@ $courtCount = count($courts);
       document.getElementById("modalTitle").textContent = "Add Court";
       document.getElementById("courtForm").reset();
       document.getElementById("courtId").value = "";
+      document.getElementById("layoutRow").value = "1";
+      document.getElementById("layoutColumn").value = "1";
       document.getElementById("courtModal").classList.remove("hidden");
     }
 
@@ -197,6 +219,8 @@ $courtCount = count($courts);
       document.getElementById("courtType").value = "pickleball";
       document.getElementById("open_hour").value = court.open_time;
       document.getElementById("close_hour").value = court.close_time;
+      document.getElementById("layoutRow").value = court.layout_row || 1;
+      document.getElementById("layoutColumn").value = court.layout_column || 1;
       document.getElementById("courtModal").classList.remove("hidden");
     }
 

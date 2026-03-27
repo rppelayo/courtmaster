@@ -228,6 +228,20 @@ try {
 
     applyStatement(
         $pdo,
+        'Add courts.layout_row',
+        static fn(): bool => columnExists($pdo, $dbName, 'courts', 'layout_row'),
+        'ALTER TABLE courts ADD COLUMN layout_row INT NULL AFTER close_time'
+    );
+
+    applyStatement(
+        $pdo,
+        'Add courts.layout_column',
+        static fn(): bool => columnExists($pdo, $dbName, 'courts', 'layout_column'),
+        'ALTER TABLE courts ADD COLUMN layout_column INT NULL AFTER layout_row'
+    );
+
+    applyStatement(
+        $pdo,
         'Add reservations.guest_name',
         static fn(): bool => columnExists($pdo, $dbName, 'reservations', 'guest_name'),
         'ALTER TABLE reservations ADD COLUMN guest_name VARCHAR(255) NULL AFTER user_id'
@@ -423,6 +437,27 @@ try {
 
     $pdo->exec("UPDATE courts SET close_time = '22:00:00' WHERE close_time IS NULL");
     echo '[apply] Backfilled missing courts.close_time values' . PHP_EOL;
+
+    $layoutBackfillStatement = $pdo->query(
+        "SELECT id, layout_row, layout_column
+         FROM courts
+         WHERE type = 'pickleball'
+         ORDER BY name ASC, id ASC"
+    );
+    $pickleballCourts = $layoutBackfillStatement->fetchAll(PDO::FETCH_ASSOC);
+    $layoutUpdateStatement = $pdo->prepare('UPDATE courts SET layout_row = ?, layout_column = ? WHERE id = ?');
+    $layoutIndex = 1;
+    foreach ($pickleballCourts as $court) {
+        $currentRow = isset($court['layout_row']) ? (int) $court['layout_row'] : 0;
+        $currentColumn = isset($court['layout_column']) ? (int) $court['layout_column'] : 0;
+        if ($currentRow > 0 && $currentColumn > 0) {
+            continue;
+        }
+
+        $layoutUpdateStatement->execute([1, $layoutIndex, (int) $court['id']]);
+        $layoutIndex++;
+    }
+    echo '[apply] Backfilled courts.layout_row and courts.layout_column values' . PHP_EOL;
 
     $pdo->exec("UPDATE users SET membership_status = 'inactive' WHERE membership_status IS NULL OR membership_status = ''");
     echo '[apply] Backfilled users.membership_status values' . PHP_EOL;

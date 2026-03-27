@@ -19,6 +19,8 @@ $owner_id = $_SESSION['user_id'];
 $type = 'pickleball';
 $open_time = $_POST['open_hour'] ?? '';
 $close_time = $_POST['close_hour'] ?? '';
+$layout_row = isset($_POST['layout_row']) ? max(1, (int) $_POST['layout_row']) : 1;
+$layout_column = isset($_POST['layout_column']) ? max(1, (int) $_POST['layout_column']) : 1;
 $imagePath = null;
 
 if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
@@ -36,8 +38,8 @@ try {
 
     if ($id) {
         // Update existing
-        $fields = "name = ?, location = ?, price = ?, member_price = ?, type = ?, open_time = ?, close_time = ?";
-        $params = [$name, $location, $price, $memberPriceValue, $type, $open_time, $close_time];
+        $fields = "name = ?, location = ?, price = ?, member_price = ?, type = ?, open_time = ?, close_time = ?, layout_row = ?, layout_column = ?";
+        $params = [$name, $location, $price, $memberPriceValue, $type, $open_time, $close_time, $layout_row, $layout_column];
 
         if ($imagePath) {
             $fields .= ", image_path = ?";
@@ -52,8 +54,8 @@ try {
         $description = "Updated court {$name}";
     } else {
         // Insert new
-        $stmt = $pdo->prepare("INSERT INTO courts (name, location, price, member_price, owner_id, open_time, close_time, type, image_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$name, $location, $price, $memberPriceValue, $owner_id, $open_time, $close_time, $type, $imagePath]);
+        $stmt = $pdo->prepare("INSERT INTO courts (name, location, price, member_price, owner_id, open_time, close_time, layout_row, layout_column, type, image_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$name, $location, $price, $memberPriceValue, $owner_id, $open_time, $close_time, $layout_row, $layout_column, $type, $imagePath]);
         $subjectId = (int) $pdo->lastInsertId();
         $actionType = 'court_created';
         $description = "Created court {$name}";
@@ -71,6 +73,8 @@ try {
             'member_rate' => $memberPriceValue !== null ? (float) $memberPriceValue : null,
             'open_time' => $open_time,
             'close_time' => $close_time,
+            'layout_row' => $layout_row,
+            'layout_column' => $layout_column,
         ],
     ]);
 

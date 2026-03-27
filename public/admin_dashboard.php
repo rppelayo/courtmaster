@@ -48,6 +48,9 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
         <button id="menu-admin_courts" onclick="loadPage('admin_courts.php')" class="admin-menu-btn">
           <i class="fas fa-table-cells-large"></i><span class="menu-label">Courts</span>
         </button>
+        <button id="menu-admin_layout" onclick="loadPage('admin_layout.php')" class="admin-menu-btn">
+          <i class="fas fa-border-all"></i><span class="menu-label">Court Layout</span>
+        </button>
         <button id="menu-admin_schedules" onclick="loadPage('admin_schedules.php')" class="admin-menu-btn">
           <i class="fas fa-calendar-alt"></i><span class="menu-label">Court Schedules</span>
         </button>
@@ -78,7 +81,7 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
           <div>
             <div class="admin-overline">Back Office</div>
             <div class="admin-topbar-title">Pickleball Venue Operations</div>
-            <div class="admin-topbar-copy">Start from the live overview, then jump into courts, schedules, walk-ins, reservations, reports, and support tools from one place.</div>
+            <div class="admin-topbar-copy">Start from the live overview, then jump into courts, court layout, schedules, walk-ins, reservations, reports, and support tools from one place.</div>
           </div>
           <div class="admin-pill"><?php echo htmlspecialchars(ucfirst((string) $_SESSION['role'])); ?> Access</div>
         </div>
