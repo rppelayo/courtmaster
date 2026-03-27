@@ -5,6 +5,7 @@ session_start();
 header('Content-Type: application/json');
 
 require_once '../includes/db.php';
+require_once '../includes/admin_activity.php';
 require_once '../includes/game_status.php';
 
 function gameStatusResponse(array $payload, int $statusCode = 200): void
@@ -108,6 +109,20 @@ $updateStatement->execute([
     $inProgressAt,
     $completedAt,
     $reservationId,
+]);
+
+adminActivityLog($pdo, [
+    'action_type' => 'game_status_updated',
+    'subject_type' => 'reservation',
+    'subject_id' => $reservationId,
+    'description' => 'Updated game status for reservation #' . $reservationId . ' to ' . gameStatusLabel($requestedStatus),
+    'metadata' => [
+        'from_status' => $currentStatus,
+        'to_status' => $requestedStatus,
+        'checked_in_at' => $checkedInAt,
+        'in_progress_at' => $inProgressAt,
+        'completed_at' => $completedAt,
+    ],
 ]);
 
 gameStatusResponse([

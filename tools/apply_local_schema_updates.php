@@ -117,6 +117,30 @@ try {
 
     applyStatement(
         $pdo,
+        'Create admin_activity_logs table',
+        static fn(): bool => tableExists($pdo, $dbName, 'admin_activity_logs'),
+        <<<SQL
+        CREATE TABLE admin_activity_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            actor_user_id INT NULL,
+            actor_role VARCHAR(20) NOT NULL DEFAULT 'admin',
+            actor_name VARCHAR(255) NOT NULL,
+            action_type VARCHAR(60) NOT NULL,
+            subject_type VARCHAR(60) NOT NULL,
+            subject_id INT NULL,
+            description VARCHAR(255) NOT NULL,
+            metadata_json LONGTEXT NULL,
+            created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_admin_activity_actor_user_id (actor_user_id),
+            KEY idx_admin_activity_action_type (action_type),
+            KEY idx_admin_activity_subject_type (subject_type),
+            KEY idx_admin_activity_created_at (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+        SQL
+    );
+
+    applyStatement(
+        $pdo,
         'Add courts.member_price',
         static fn(): bool => columnExists($pdo, $dbName, 'courts', 'member_price'),
         'ALTER TABLE courts ADD COLUMN member_price DECIMAL(10,2) NULL AFTER price'

@@ -5,6 +5,7 @@ session_start();
 header('Content-Type: application/json');
 
 require_once '../includes/db.php';
+require_once '../includes/admin_activity.php';
 require_once '../includes/pricing.php';
 require_once '../includes/reservation_rules.php';
 
@@ -227,6 +228,23 @@ try {
     $guestPaymentStatement->execute([$payment, $reservationId]);
 
     $pdo->commit();
+
+    adminActivityLog($pdo, [
+        'action_type' => 'reservation_updated',
+        'subject_type' => 'reservation',
+        'subject_id' => $reservationId,
+        'description' => 'Updated reservation #' . $reservationId,
+        'metadata' => [
+            'court_name' => $court['name'],
+            'date' => $date,
+            'time_slots' => $timeSlots,
+            'payment_status' => $paymentStatus,
+            'discount_type' => $pricing['discount_type'],
+            'booking_source' => $reservation['booking_source'] ?? 'advance',
+            'hours_played' => $hoursPlayed,
+            'total' => $payment,
+        ],
+    ]);
 
     updateReservationResponse([
         'success' => true,

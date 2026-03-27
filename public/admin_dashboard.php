@@ -5,8 +5,6 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
     header("Location: ../index.html");
     exit;
 }
-
-include 'chatbox.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -61,6 +59,9 @@ include 'chatbox.php';
         <button id="menu-admin_reports" onclick="loadPage('admin_reports.php')" class="admin-menu-btn">
           <i class="fas fa-chart-column"></i><span class="menu-label">Reports</span>
         </button>
+        <button id="menu-admin_support" onclick="loadPage('admin_support.php')" class="admin-menu-btn">
+          <i class="fas fa-toolbox"></i><span class="menu-label">Support Tools</span>
+        </button>
       </nav>
 
       <div class="p-4">
@@ -76,7 +77,7 @@ include 'chatbox.php';
           <div>
             <div class="admin-overline">Back Office</div>
             <div class="admin-topbar-title">Pickleball Venue Operations</div>
-            <div class="admin-topbar-copy">Start from the live overview, then jump into courts, schedules, walk-ins, reservations, reports, and staff-side activity from one place.</div>
+            <div class="admin-topbar-copy">Start from the live overview, then jump into courts, schedules, walk-ins, reservations, reports, and support tools from one place.</div>
           </div>
           <div class="admin-pill"><?php echo htmlspecialchars(ucfirst((string) $_SESSION['role'])); ?> Access</div>
         </div>

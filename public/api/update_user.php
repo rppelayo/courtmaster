@@ -3,6 +3,7 @@
 session_start();
 header('Content-Type: application/json');
 require_once '../includes/db.php';
+require_once '../includes/admin_activity.php';
 require_once '../includes/membership.php';
 
 // Only allow admins
@@ -41,6 +42,7 @@ $membershipPlanValue = $membershipPlan !== '' ? $membershipPlan : null;
 $membershipBenefitsValue = $membershipBenefits !== '' ? $membershipBenefits : null;
 
 try {
+    $targetUserId = (int) $data['id'];
     $stmt = $pdo->prepare(
         "UPDATE users
          SET name = ?, full_name = ?, email = ?, contact_number = ?, role = ?, membership_status = ?, membership_plan = ?, member_since = ?, membership_expires_at = ?, membership_benefits = ?, updated_at = NOW()
@@ -57,7 +59,23 @@ try {
         $memberSinceValue,
         $membershipExpiresValue,
         $membershipBenefitsValue,
-        $data['id']
+        $targetUserId
+    ]);
+
+    adminActivityLog($pdo, [
+        'action_type' => 'user_updated',
+        'subject_type' => 'user',
+        'subject_id' => $targetUserId,
+        'description' => 'Updated user ' . trim((string) ($data['full_name'] ?? $data['email'] ?? ('#' . $targetUserId))),
+        'metadata' => [
+            'login' => $data['name'] ?? null,
+            'full_name' => $data['full_name'] ?? null,
+            'email' => $data['email'] ?? null,
+            'role' => $role,
+            'membership_status' => $membershipStatus,
+            'membership_plan' => $membershipPlanValue,
+            'membership_expires_at' => $membershipExpiresValue,
+        ],
     ]);
 
     echo json_encode(['success' => true]);

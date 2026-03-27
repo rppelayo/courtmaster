@@ -4,6 +4,7 @@ declare(strict_types=1);
 session_start();
 header('Content-Type: application/json');
 require_once '../includes/db.php';
+require_once '../includes/admin_activity.php';
 require_once '../includes/pricing.php';
 require_once '../includes/reservation_rules.php';
 require_once '../includes/game_status.php';
@@ -215,6 +216,26 @@ try {
     $guestStatement->execute([$reservationId, $customerName, $contactNumber, $pricing['total']]);
 
     $pdo->commit();
+
+    adminActivityLog($pdo, [
+        'action_type' => 'walk_in_created',
+        'subject_type' => 'reservation',
+        'subject_id' => $reservationId,
+        'description' => "Created walk-in reservation for {$customerName}",
+        'metadata' => [
+            'booking_source' => 'walk-in',
+            'court_id' => $courtId,
+            'court_name' => $court['name'],
+            'date' => $date,
+            'time_slots' => $timeSlots,
+            'hours_played' => $hoursPlayed,
+            'payment_method' => $paymentMethod,
+            'payment_status' => $paymentStatus,
+            'game_status' => $gameStatus,
+            'discount_type' => $pricing['discount_type'],
+            'total' => $pricing['total'],
+        ],
+    ]);
 
     walkInResponse([
         'success' => true,
