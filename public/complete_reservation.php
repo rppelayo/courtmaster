@@ -356,9 +356,9 @@ if (isset($_SESSION['user_id'])) {
     </form>
   </div>
 
-  <div id="payment-qr-modal" class="fixed inset-0 hidden items-center justify-center bg-black bg-opacity-75 px-4 z-50">
-    <div class="modal-card relative w-full max-w-4xl rounded-[28px] p-6 md:p-8">
-      <button type="button" id="close-payment-qr" class="absolute right-4 top-3 text-2xl text-gray-500 hover:text-gray-800">
+  <div id="payment-qr-modal" class="fixed inset-0 z-50 hidden items-start justify-center overflow-y-auto bg-black bg-opacity-75 px-4 py-4 sm:items-center">
+    <div class="modal-card relative my-2 max-h-[calc(100vh-2rem)] w-full max-w-4xl overflow-y-auto rounded-[28px] p-5 md:p-8">
+      <button type="button" id="close-payment-qr" class="sticky top-0 z-10 ml-auto flex h-10 w-10 items-center justify-center rounded-full bg-white text-2xl text-gray-500 shadow-sm hover:text-gray-800">
         &times;
       </button>
 
@@ -387,7 +387,7 @@ if (isset($_SESSION['user_id'])) {
         </div>
       </div>
 
-      <div class="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+      <div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
         <div class="rounded-[24px] border border-[color:var(--border)] p-4 text-center">
           <h3 class="text-lg font-semibold text-gray-800">GCash</h3>
           <p class="mt-1 text-sm text-slate-500">Scan with the GCash app.</p>

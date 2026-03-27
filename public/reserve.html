@@ -111,35 +111,131 @@
       color: var(--primary-strong);
     }
 
-    .summary-stat {
-      border: 1px solid rgba(207, 224, 216, 0.9);
-      background: linear-gradient(180deg, #ffffff 0%, #f7fbf9 100%);
-    }
-
     .summary-grid {
       display: grid;
-      gap: 12px;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 0;
+      grid-template-columns: minmax(0, 1fr);
     }
 
     .summary-heading {
       font-size: 0.875rem;
     }
 
-    .summary-label {
+    .summary-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .summary-toggle-button {
+      border: 1px solid rgba(15, 118, 110, 0.16);
+      background: #eef7f4;
+      color: var(--primary);
       font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 0.45rem 0.75rem;
+      border-radius: 999px;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    .summary-toggle-button:hover {
+      background: #dff1ec;
+      color: var(--primary-strong);
+    }
+
+    .summary-stat {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      border-top: 1px solid rgba(207, 224, 216, 0.9);
+      padding: 0.7rem 0;
+    }
+
+    .summary-grid .summary-stat:first-child {
+      border-top: none;
+      padding-top: 0;
+    }
+
+    .summary-grid .summary-stat:last-child {
+      padding-bottom: 0;
+    }
+
+    .summary-label {
+      font-size: 0.68rem;
       line-height: 1.1;
+      flex: 0 0 auto;
+      margin-top: 0.18rem;
     }
 
     .summary-value {
-      font-size: 0.95rem;
-      line-height: 1.2;
+      font-size: 0.92rem;
+      line-height: 1.25;
+      text-align: right;
       word-break: break-word;
+      min-width: 0;
+      flex: 1;
+      margin-top: 0 !important;
+    }
+
+    .summary-stat-total .summary-value {
+      color: var(--primary-strong);
+      font-weight: 700;
     }
 
     .summary-tone {
       border: 1px solid rgba(15, 118, 110, 0.12);
       background: linear-gradient(180deg, #fbfffd 0%, #eef7f4 100%);
+    }
+
+    @media (min-width: 768px) {
+      .summary-grid {
+        gap: 12px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .summary-stat-wide {
+        grid-column: span 2;
+      }
+
+      .summary-stat {
+        display: block;
+        border: 1px solid rgba(207, 224, 216, 0.9);
+        border-radius: 20px;
+        background: linear-gradient(180deg, #ffffff 0%, #f7fbf9 100%);
+        padding: 0.75rem;
+      }
+
+      .summary-grid .summary-stat:first-child,
+      .summary-grid .summary-stat:last-child {
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
+      }
+
+      .summary-label {
+        font-size: 0.72rem;
+        margin-top: 0;
+      }
+
+      .summary-value {
+        font-size: 0.95rem;
+        text-align: left;
+        margin-top: 0.5rem !important;
+      }
+    }
+
+    @media (min-width: 1024px) {
+      .summary-grid {
+        gap: 12px;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+
+      .summary-stat-wide {
+        grid-column: auto;
+      }
     }
 
     .section-card,
@@ -303,16 +399,6 @@
       cursor: not-allowed;
     }
 
-    @media (max-width: 1023px) {
-      .summary-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .summary-stat-wide {
-        grid-column: span 2;
-      }
-    }
-
     @media (max-width: 639px) {
       .summary-floating {
         top: 8px;
@@ -320,39 +406,14 @@
 
       #reservation-summary-panel {
         padding: 12px;
-        max-height: min(25vh, 180px);
-        max-height: min(25svh, 180px);
-        overflow: hidden;
+        max-height: min(26vh, 196px);
+        max-height: min(26svh, 196px);
+        overflow-y: auto;
       }
 
       .summary-heading {
         font-size: 0.78rem;
         letter-spacing: 0.14em;
-      }
-
-      .summary-grid {
-        display: flex;
-        gap: 8px;
-        overflow-x: auto;
-        overflow-y: hidden;
-        padding-bottom: 2px;
-        scrollbar-width: none;
-      }
-
-      .summary-grid::-webkit-scrollbar {
-        display: none;
-      }
-
-      .summary-stat,
-      .summary-stat-wide {
-        min-width: 124px;
-        flex: 0 0 auto;
-        padding: 10px 12px;
-        border-radius: 16px;
-      }
-
-      .summary-stat-wide {
-        min-width: 156px;
       }
 
       .summary-label {
@@ -361,9 +422,8 @@
       }
 
       .summary-value {
-        margin-top: 6px;
-        font-size: 0.82rem;
-        line-height: 1.15;
+        font-size: 0.84rem;
+        line-height: 1.2;
       }
     }
   </style>
@@ -375,10 +435,6 @@
       <div id="booking-mode-label" class="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800">
         Guest Booking
       </div>
-      <h1 class="mt-5 text-3xl font-bold text-slate-800 md:text-4xl">Choose your court and time</h1>
-      <p class="mx-auto mt-3 max-w-2xl text-base text-slate-500">
-        A simple pickleball reservation flow with hourly slots, clear availability, and a quick final confirmation.
-      </p>
       <div id="reserve-user-actions" class="mt-5 hidden flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
         <a href="dashboard.php" class="secondary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold">
           <i class="fas fa-arrow-left"></i>
@@ -392,8 +448,13 @@
     </header>
 
     <div id="reservation-summary-panel" class="summary-card summary-floating mb-8 rounded-[24px] p-4 md:p-5">
-      <div class="summary-heading font-semibold uppercase tracking-[0.18em] text-teal-700">Reservation Summary</div>
-      <div class="summary-grid mt-3">
+      <div class="summary-header">
+        <div class="summary-heading font-semibold uppercase tracking-[0.18em] text-teal-700">Reservation Summary</div>
+        <button type="button" id="summary-toggle-btn" class="summary-toggle-button" aria-controls="reservation-summary-content" aria-expanded="true">
+          Hide Summary
+        </button>
+      </div>
+      <div id="reservation-summary-content" class="summary-grid mt-3">
         <div class="summary-stat rounded-[20px] px-3 py-3">
           <div class="summary-label font-semibold uppercase tracking-[0.18em] text-slate-500">Court</div>
           <div id="summary-court" class="summary-value mt-2 font-semibold text-slate-800 md:text-base">Not selected</div>
@@ -410,7 +471,7 @@
           <div class="summary-label font-semibold uppercase tracking-[0.18em] text-slate-500">Selected Time</div>
           <div id="summary-times" class="summary-value mt-2 font-semibold text-slate-800 md:text-base">Not selected</div>
         </div>
-        <div class="summary-stat rounded-[20px] px-3 py-3">
+        <div class="summary-stat summary-stat-total rounded-[20px] px-3 py-3">
           <div class="summary-label font-semibold uppercase tracking-[0.18em] text-slate-500">Total Due</div>
           <div id="summary-total" class="summary-value mt-2 font-semibold text-slate-800 md:text-base">P0.00</div>
         </div>
@@ -558,7 +619,7 @@
           </div>
 
           <div class="section-card rounded-[24px] p-5">
-            <div class="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">Step 4</div>
+            <div class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Step 4</div>
             <h2 class="mt-2 text-xl font-semibold text-slate-800">Confirm Reservation</h2>
             <p class="mt-2 text-sm text-slate-500">Review the payment breakdown, then submit your booking.</p>
 
@@ -599,9 +660,9 @@
     </section>
   </div>
 
-  <div id="payment-qr-modal" class="fixed inset-0 hidden items-center justify-center bg-black bg-opacity-75 px-4 z-50">
-    <div class="modal-card relative w-full max-w-4xl rounded-[28px] p-6 md:p-8">
-      <button type="button" id="close-payment-qr" class="absolute right-4 top-3 text-2xl text-gray-500 hover:text-gray-800">
+  <div id="payment-qr-modal" class="fixed inset-0 hidden items-start justify-center overflow-y-auto bg-black bg-opacity-75 px-4 py-4 sm:items-center z-50">
+    <div class="modal-card relative my-2 w-full max-w-4xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[28px] p-5 md:p-8">
+      <button type="button" id="close-payment-qr" class="sticky top-0 z-10 ml-auto flex h-10 w-10 items-center justify-center rounded-full bg-white text-2xl text-gray-500 shadow-sm hover:text-gray-800">
         &times;
       </button>
 
@@ -630,7 +691,7 @@
         </div>
       </div>
 
-      <div class="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+      <div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
         <div class="rounded-[24px] border border-[color:var(--border)] p-4 text-center">
           <h3 class="text-lg font-semibold text-gray-800">GCash</h3>
           <p class="mt-1 text-sm text-slate-500">Scan with the GCash app.</p>
@@ -705,11 +766,48 @@
     let renderedHourSlots = [];
     let checkoutStepOpen = false;
     let isSubmittingReservation = false;
+    let isSummaryCollapsed = false;
+
+    function getLocalDateInputValue(date = new Date()) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    function syncSummaryToggleButton() {
+      const toggleButton = document.getElementById("summary-toggle-btn");
+      const summaryContent = document.getElementById("reservation-summary-content");
+
+      if (!toggleButton || !summaryContent) {
+        return;
+      }
+
+      summaryContent.classList.toggle("hidden", isSummaryCollapsed);
+      toggleButton.textContent = isSummaryCollapsed ? "Show Summary" : "Hide Summary";
+      toggleButton.setAttribute("aria-expanded", isSummaryCollapsed ? "false" : "true");
+    }
+
+    function wireSummaryToggle() {
+      const toggleButton = document.getElementById("summary-toggle-btn");
+
+      if (!toggleButton) {
+        return;
+      }
+
+      toggleButton.addEventListener("click", function () {
+        isSummaryCollapsed = !isSummaryCollapsed;
+        syncSummaryToggleButton();
+      });
+
+      syncSummaryToggleButton();
+    }
 
     document.addEventListener("DOMContentLoaded", async function () {
       const dateInput = document.getElementById("reservation-date");
-      const today = new Date().toISOString().split("T")[0];
+      const today = getLocalDateInputValue();
 
+      wireSummaryToggle();
       wireCheckoutStep();
       await loadBookingContext();
       syncAuthenticatedReserveActions();
@@ -1014,21 +1112,43 @@
       if (sortedSelection.length === 0) {
         selectedTimeSlots = new Set([time]);
         selectionAnchorTime = time;
-      } else if (sortedSelection.length === 1 && selectionAnchorTime) {
-        if (sortedSelection[0] === time) {
+      } else if (selectedTimeSlots.has(time)) {
+        if (sortedSelection.length === 1) {
           clearSelectedTimeSlots();
+        } else if (time === sortedSelection[0]) {
+          const nextRange = sortedSelection.slice(1);
+          selectedTimeSlots = new Set(nextRange);
+          selectionAnchorTime = nextRange[0] || "";
+        } else if (time === sortedSelection[sortedSelection.length - 1]) {
+          const nextRange = sortedSelection.slice(0, -1);
+          selectedTimeSlots = new Set(nextRange);
+          selectionAnchorTime = nextRange[0] || "";
         } else {
-          const range = buildSlotRange(selectionAnchorTime, time);
-          if (range.length === 0) {
-            alert("Please choose a continuous available time range.");
-            return;
-          }
-          selectedTimeSlots = new Set(range);
-          selectionAnchorTime = range[0] || time;
+          selectedTimeSlots = new Set([time]);
+          selectionAnchorTime = time;
         }
+      } else if (sortedSelection.length === 1) {
+        const range = buildSlotRange(sortedSelection[0], time);
+        if (range.length === 0) {
+          alert("Please choose a continuous available time range.");
+          return;
+        }
+        selectedTimeSlots = new Set(range);
+        selectionAnchorTime = range[0] || time;
       } else {
-        selectedTimeSlots = new Set([time]);
-        selectionAnchorTime = time;
+        const firstSelected = sortedSelection[0];
+        const lastSelected = sortedSelection[sortedSelection.length - 1];
+        const range = time < firstSelected
+          ? buildSlotRange(time, lastSelected)
+          : buildSlotRange(firstSelected, time);
+
+        if (range.length === 0) {
+          alert("Please choose a continuous available time range.");
+          return;
+        }
+
+        selectedTimeSlots = new Set(range);
+        selectionAnchorTime = range[0] || time;
       }
 
       refreshSlotButtons();
@@ -1154,7 +1274,7 @@
       checkoutStepOpen = false;
 
       const dateInput = document.getElementById("reservation-date");
-      dateInput.value = new Date().toISOString().split("T")[0];
+      dateInput.value = getLocalDateInputValue();
       syncReservationSummary(dateInput.value);
       syncProceedButton(dateInput.value);
       syncCheckoutVisibility(dateInput.value);
@@ -1203,7 +1323,7 @@
         proceedButton.disabled = true;
         clearSelectionButton.disabled = true;
         proceedButton.textContent = "Select a Time Slot";
-        scheduleHelp.textContent = "Choose a start time. Click another available slot to extend the booking range.";
+        scheduleHelp.textContent = "Choose a start time, then keep tapping adjacent available slots to extend the booking range.";
         return;
       }
 
@@ -1221,7 +1341,7 @@
         return;
       }
 
-      scheduleHelp.textContent = "Your continuous booking range is ready. Continue below to enter your details and payment method on this page.";
+      scheduleHelp.textContent = "Your continuous booking range is ready. Tap either end of the range if you want to trim it before continuing.";
     }
 
     function syncCheckoutVisibility(date) {
