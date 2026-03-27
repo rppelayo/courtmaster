@@ -1,19 +1,37 @@
 <?php
+declare(strict_types=1);
+
 session_start();
-require_once "includes/db.php";
+require_once 'includes/db.php';
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
-    header("Location: ../login.html");
+    header('Location: ../login.html');
     exit;
 }
 
-$userRole = (string) ($_SESSION['role'] ?? 'admin');
-$statement = $pdo->query("SELECT * FROM courts ORDER BY name");
+$courtStatement = $pdo->query(
+    "SELECT id, name, location, price, member_price, open_time, close_time
+     FROM courts
+     WHERE type = 'pickleball'
+     ORDER BY COALESCE(layout_row, 9999), COALESCE(layout_column, 9999), name"
+);
+$courts = $courtStatement->fetchAll(PDO::FETCH_ASSOC);
 
-$courts = $statement->fetchAll(PDO::FETCH_ASSOC);
-$courtCount = count($courts);
+$selectedCourtId = max(0, (int) ($_GET['court_id'] ?? 0));
+if ($selectedCourtId === 0 && $courts !== []) {
+    $selectedCourtId = (int) ($courts[0]['id'] ?? 0);
+}
+
+$selectedCourt = null;
+foreach ($courts as $court) {
+    if ((int) ($court['id'] ?? 0) === $selectedCourtId) {
+        $selectedCourt = $court;
+        break;
+    }
+}
+
+$today = (new DateTimeImmutable('today'))->format('Y-m-d');
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -21,279 +39,550 @@ $courtCount = count($courts);
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pickleball Admin - Schedules</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet" />
-  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/js/all.min.js" integrity="sha512-b+nQTCdtTBIRIbraqNEwsjB6UvL3UEMkXnhzd8awtCYh0Kcsjl9uEgwVFVbhoj3uu1DO1ZMacNvLoyJJiNfcvg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <link rel="stylesheet" href="styles/admin-theme.css">
+  <style>
+    .hourly-schedule-table td,
+    .hourly-schedule-table th {
+      vertical-align: middle;
+    }
+
+    .hourly-schedule-table td {
+      white-space: normal;
+    }
+
+    .schedule-slot-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+  </style>
 </head>
 <body class="admin-theme-body admin-frame-body">
   <div class="admin-page-shell">
     <div class="admin-page-header">
-      <div class="admin-overline">Court Schedules</div>
-      <div class="admin-title">Manage each in-venue court schedule</div>
-      <div class="admin-copy">Each court in this pickleball venue has its own schedule. Open Court A, Court B, or any other court below to review reservations, block single hours, or close a full day.</div>
+      <div class="admin-overline">Court Schedule</div>
+      <div class="admin-title">Review one court by the hour</div>
+      <div class="admin-copy">Open a specific court schedule from the Courts table, choose a date, and manage each hourly slot the way the venue actually operates.</div>
     </div>
 
-    <div class="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
-      <div class="admin-card">
-        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div class="text-sm font-semibold text-slate-800">Keep every court calendar accurate</div>
-            <p class="mt-1 text-sm text-slate-500">Use this screen to manage per-court schedules for your fixed venue courts, whether that is Court A, Court B, Court C, or future additions.</p>
-          </div>
-          <div class="admin-pill"><?= htmlspecialchars(ucfirst($userRole)) ?> Access</div>
-        </div>
+    <?php if ($courts === []): ?>
+      <div class="admin-card text-center">
+        <div class="text-lg font-semibold text-slate-800">No courts are available yet.</div>
+        <p class="mt-2 text-sm text-slate-500">Create at least one pickleball court first, then come back here to manage its hourly schedule.</p>
       </div>
-
-      <div class="admin-stat-card">
-        <div class="admin-stat-label">Venue Courts</div>
-        <div class="admin-stat-value"><?= $courtCount ?></div>
-      </div>
-    </div>
-
-    <div class="admin-table-wrap">
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th>Court Name</th>
-            <th>Business Hours</th>
-            <th>Rate</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php foreach ($courts as $court): ?>
-            <?php
-            $openTime = !empty($court['open_time']) ? DateTimeImmutable::createFromFormat('H:i:s', (string) $court['open_time']) : null;
-            $closeTime = !empty($court['close_time']) ? DateTimeImmutable::createFromFormat('H:i:s', (string) $court['close_time']) : null;
-            $hoursLabel = ($openTime instanceof DateTimeImmutable && $closeTime instanceof DateTimeImmutable)
-                ? $openTime->format('h:i A') . ' - ' . $closeTime->format('h:i A')
-                : 'Hours not set';
-            ?>
-            <tr>
-              <td>
-                <div class="font-semibold text-slate-800"><?= htmlspecialchars((string) $court['name']) ?></div>
-                <div class="mt-1 text-sm text-slate-500">Per-court calendar</div>
-              </td>
-              <td><?= htmlspecialchars($hoursLabel) ?></td>
-              <td>P<?= number_format((float) ($court['price'] ?? 0), 2) ?>/hr</td>
-              <td>
-                <button
-                  onclick='openScheduleModal(<?= (int) $court['id'] ?>, <?= json_encode((string) $court['name']) ?>)'
-                  class="admin-primary-btn !px-4 !py-2 text-sm"
-                  type="button"
-                >
-                  <i class="fas fa-calendar-days"></i>
-                  Open Schedule
-                </button>
-              </td>
-            </tr>
-          <?php endforeach; ?>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <div id="schedule-modal" class="admin-modal-backdrop hidden">
-    <div class="admin-modal-panel max-w-6xl max-h-[92vh] overflow-y-auto">
-      <div class="flex flex-col gap-4 border-b border-slate-200 pb-5 md:flex-row md:items-start md:justify-between">
-        <div>
-          <div class="admin-overline">Per-Court Calendar</div>
-          <div id="schedule-modal-title" class="admin-title text-[1.45rem]">Schedule</div>
-          <p class="mt-2 max-w-2xl text-sm text-slate-500">This calendar applies only to the selected court. Select an open slot to mark it unavailable, or open the day view and block the whole day when needed.</p>
-        </div>
-        <div class="flex items-center gap-3">
-          <button
-            id="mark-day-off-btn"
-            class="admin-danger-btn hidden"
-            onclick="markWholeDayUnavailable()"
-            type="button"
-          >
-            <i class="fas fa-ban"></i>
-            Close Day
-          </button>
-          <button
-            onclick="closeScheduleModal()"
-            class="admin-secondary-btn"
-            type="button"
-          >
-            <i class="fas fa-xmark"></i>
-            Close
-          </button>
-        </div>
-      </div>
-
-      <div class="mt-5 grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
-        <div class="admin-card space-y-4">
-          <div>
-            <div class="admin-stat-label">How It Works</div>
-            <div class="mt-3 space-y-3 text-sm text-slate-600">
-              <p>Click and drag a time slot to mark that hour as unavailable.</p>
-              <p>Select an existing event to delete a closure or remove a reservation block.</p>
-              <p>Switch to the day view if you need to close the full operating day.</p>
+    <?php else: ?>
+      <div class="mb-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div class="admin-card">
+          <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px_190px_auto] lg:items-end">
+            <div>
+              <label for="court-select" class="admin-field-label">Court</label>
+              <select id="court-select" class="admin-select">
+                <?php foreach ($courts as $court): ?>
+                  <option value="<?= (int) $court['id'] ?>" <?= (int) ($court['id'] ?? 0) === $selectedCourtId ? 'selected' : '' ?>>
+                    <?= htmlspecialchars((string) $court['name']) ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
             </div>
-          </div>
 
-          <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-            <div class="admin-stat-label">Legend</div>
-            <div class="mt-3 space-y-2 text-sm text-slate-700">
-              <div class="flex items-center gap-3">
-                <span class="h-3 w-3 rounded-full bg-rose-500"></span>
-                Reserved
-              </div>
-              <div class="flex items-center gap-3">
-                <span class="h-3 w-3 rounded-full bg-teal-700"></span>
-                Venue closed
-              </div>
+            <div>
+              <label for="schedule-date" class="admin-field-label">Date</label>
+              <input id="schedule-date" type="date" class="admin-input" value="<?= htmlspecialchars($today) ?>" />
+            </div>
+
+            <div class="flex gap-3">
+              <button type="button" class="admin-secondary-btn w-full" onclick="refreshSchedule()">
+                <i class="fas fa-rotate-right"></i>
+                Refresh
+              </button>
+            </div>
+
+            <div class="flex gap-3">
+              <button type="button" class="admin-secondary-btn w-full" onclick="openAdminPage('admin_courts.php')">
+                <i class="fas fa-arrow-left"></i>
+                Back to Courts
+              </button>
             </div>
           </div>
         </div>
 
         <div class="admin-card">
-          <div id="admin-calendar"></div>
+          <div class="admin-stat-label">Selected Court</div>
+          <div id="selected-court-name" class="admin-stat-value">
+            <?= htmlspecialchars((string) ($selectedCourt['name'] ?? 'Court')) ?>
+          </div>
+          <div id="selected-court-meta" class="mt-2 text-sm text-slate-500">
+            <?= $selectedCourt !== null ? htmlspecialchars((string) (($selectedCourt['location'] ?? '') !== '' ? $selectedCourt['location'] : 'Venue court')) : 'Choose a court to begin.' ?>
+          </div>
         </div>
       </div>
-    </div>
+
+      <div class="admin-stat-grid mb-5 md:grid-cols-4">
+        <div class="admin-stat-card">
+          <div class="admin-stat-label">Court Hours</div>
+          <div id="stat-hours" class="admin-stat-value">-</div>
+        </div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-label">Available Hours</div>
+          <div id="stat-available" class="admin-stat-value">0</div>
+        </div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-label">Reserved / Live</div>
+          <div id="stat-reserved" class="admin-stat-value">0</div>
+        </div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-label">Venue Blocks</div>
+          <div id="stat-blocked" class="admin-stat-value">0</div>
+        </div>
+      </div>
+
+      <div class="mb-5 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div class="admin-filter-bar flex flex-col gap-3">
+          <div class="text-sm font-semibold text-slate-800">Hourly slot controls</div>
+          <p class="text-sm text-slate-500">Use the table below to block one hour at a time, reopen venue blocks, and quickly review player reservations without switching to a calendar.</p>
+        </div>
+
+        <div class="flex flex-col gap-3 sm:flex-row">
+          <button type="button" class="admin-danger-btn" onclick="blockWholeDay()">
+            <i class="fas fa-ban"></i>
+            Block Open Hours
+          </button>
+          <button type="button" class="admin-secondary-btn" onclick="reopenDayBlocks()">
+            <i class="fas fa-lock-open"></i>
+            Reopen Venue Blocks
+          </button>
+        </div>
+      </div>
+
+      <div class="admin-table-wrap">
+        <table class="admin-table hourly-schedule-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Status</th>
+              <th>Details</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="hourly-schedule-body">
+            <tr>
+              <td colspan="4" class="text-sm text-slate-500">Loading schedule...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
   </div>
 
   <script>
-    let adminCalendar;
-    let selectedCourtId = null;
+    const courts = <?= json_encode(array_map(static function (array $court): array {
+        return [
+            'id' => (int) ($court['id'] ?? 0),
+            'name' => (string) ($court['name'] ?? ''),
+            'location' => (string) ($court['location'] ?? ''),
+            'price' => (float) ($court['price'] ?? 0),
+            'member_price' => isset($court['member_price']) ? (float) $court['member_price'] : null,
+            'open_time' => (string) ($court['open_time'] ?? '08:00:00'),
+            'close_time' => (string) ($court['close_time'] ?? '22:00:00'),
+        ];
+    }, $courts), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    const today = <?= json_encode($today, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    const statusLabels = {
+      reserved: "Reserved",
+      checked_in: "Checked-in",
+      in_progress: "In Progress",
+      completed: "Completed"
+    };
+    const statusClasses = {
+      available: "bg-emerald-100 text-emerald-700",
+      blocked: "bg-slate-200 text-slate-700",
+      reserved: "bg-sky-100 text-sky-700",
+      checked_in: "bg-blue-100 text-blue-700",
+      in_progress: "bg-amber-100 text-amber-700",
+      completed: "bg-emerald-100 text-emerald-700",
+      past: "bg-slate-100 text-slate-500"
+    };
 
-    async function openScheduleModal(courtId, courtName) {
-      selectedCourtId = courtId;
-      document.getElementById("schedule-modal-title").textContent = `Schedule for ${courtName}`;
-      document.getElementById("schedule-modal").classList.remove("hidden");
-      document.body.classList.add("overflow-hidden");
-      renderAdminCalendar();
-    }
+    let selectedCourtId = Number(<?= json_encode($selectedCourtId) ?>);
+    let selectedDate = today;
+    let scheduleData = {
+      reservations: [],
+      open_time: "08:00:00",
+      close_time: "22:00:00"
+    };
 
-    async function fetchCourtReservations(courtId) {
-      const response = await fetch("api/get_court_reservations.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ court_id: courtId })
-      });
+    document.addEventListener("DOMContentLoaded", function () {
+      const courtSelect = document.getElementById("court-select");
+      const dateInput = document.getElementById("schedule-date");
 
-      if (!response.ok) {
-        alert("Failed to load reservations.");
-        return { reservations: [], openTime: "08:00", closeTime: "22:00" };
+      if (!courtSelect || !dateInput) {
+        return;
       }
 
-      const data = await response.json();
-      const events = [];
+      dateInput.value = today;
+      dateInput.min = today;
 
-      data.reservations.forEach((reservation) => {
-        if (!reservation.time_slots) {
-          return;
-        }
+      courtSelect.addEventListener("change", function () {
+        selectedCourtId = Number(this.value || 0);
+        syncSelectedCourtMeta();
+        updateScheduleUrl();
+        refreshSchedule();
+      });
 
-        const slotSet = new Set(reservation.time_slots.split(",").map((slot) => slot.trim()).filter(Boolean));
+      dateInput.addEventListener("change", function () {
+        selectedDate = this.value || today;
+        refreshSchedule();
+      });
 
-        slotSet.forEach((slot) => {
-          const [hour, minute] = slot.split(":").map(Number);
-          const start = `${reservation.date}T${slot}`;
-          const endHour = hour + 1;
-          const end = `${reservation.date}T${endHour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}:00`;
+      syncSelectedCourtMeta();
+      refreshSchedule();
+    });
 
-          events.push({
-            id: `${reservation.id}-${slot}`,
-            title: reservation.is_admin_set == 1 ? "Closed" : "Reserved",
-            start,
-            end,
-            allDay: false,
-            color: reservation.is_admin_set == 1 ? "#0f766e" : "#e11d48"
-          });
+    function openAdminPage(page) {
+      if (window.parent && typeof window.parent.loadPage === "function") {
+        window.parent.loadPage(page);
+        return;
+      }
+
+      window.location.href = page;
+    }
+
+    function updateScheduleUrl() {
+      const url = new URL(window.location.href);
+      url.searchParams.set("court_id", String(selectedCourtId));
+      window.history.replaceState({}, "", url);
+    }
+
+    function getSelectedCourt() {
+      return courts.find((court) => Number(court.id) === Number(selectedCourtId)) || null;
+    }
+
+    function syncSelectedCourtMeta() {
+      const selectedCourt = getSelectedCourt();
+      if (!selectedCourt) {
+        return;
+      }
+
+      document.getElementById("selected-court-name").textContent = selectedCourt.name;
+      document.getElementById("selected-court-meta").textContent = selectedCourt.location || "Venue court";
+    }
+
+    function normalizeTime(timeValue) {
+      const value = String(timeValue || "").trim();
+      if (!value) {
+        return "";
+      }
+
+      const parts = value.split(":");
+      if (parts.length >= 2) {
+        const hour = parts[0].padStart(2, "0");
+        const minute = parts[1].padStart(2, "0");
+        const second = (parts[2] || "00").padStart(2, "0");
+        return `${hour}:${minute}:${second}`;
+      }
+
+      return "";
+    }
+
+    function formatTo12Hour(timeValue) {
+      const normalized = normalizeTime(timeValue);
+      if (!normalized) {
+        return "N/A";
+      }
+
+      const [hourText, minuteText] = normalized.split(":");
+      const hour = Number(hourText);
+      const suffix = hour >= 12 ? "PM" : "AM";
+      const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+      return `${displayHour}:${minuteText} ${suffix}`;
+    }
+
+    function buildHourlySlots(openTime, closeTime) {
+      const start = normalizeTime(openTime);
+      const end = normalizeTime(closeTime);
+      if (!start || !end) {
+        return [];
+      }
+
+      const [startHour, startMinute] = start.split(":").map(Number);
+      const [endHour, endMinute] = end.split(":").map(Number);
+      let currentMinutes = (startHour * 60) + startMinute;
+      const endMinutes = (endHour * 60) + endMinute;
+      const slots = [];
+
+      while (currentMinutes < endMinutes) {
+        const hour = String(Math.floor(currentMinutes / 60)).padStart(2, "0");
+        const minute = String(currentMinutes % 60).padStart(2, "0");
+        slots.push(`${hour}:${minute}:00`);
+        currentMinutes += 60;
+      }
+
+      return slots;
+    }
+
+    function selectedDateReservations() {
+      return scheduleData.reservations
+        .filter((reservation) => String(reservation.date || "") === selectedDate)
+        .map((reservation) => {
+          const rawSlots = String(reservation.time_slots || "")
+            .split(",")
+            .map((slot) => normalizeTime(slot))
+            .filter(Boolean);
+
+          return {
+            ...reservation,
+            normalizedSlots: rawSlots
+          };
+        });
+    }
+
+    function buildSlotMap() {
+      const slotMap = new Map();
+
+      selectedDateReservations().forEach((reservation) => {
+        reservation.normalizedSlots.forEach((slot) => {
+          if (!slotMap.has(slot)) {
+            slotMap.set(slot, reservation);
+          }
         });
       });
 
-      return {
-        reservations: events,
-        openTime: data.open_time,
-        closeTime: data.close_time
-      };
+      return slotMap;
     }
 
-    async function renderAdminCalendar() {
-      const { openTime, closeTime } = await fetchCourtReservations(selectedCourtId);
+    function reservationLabel(reservation) {
+      return reservation.full_name
+        || reservation.guest_name
+        || reservation.email
+        || reservation.guest_email
+        || `Reservation #${reservation.id}`;
+    }
 
-      if (adminCalendar) {
-        adminCalendar.destroy();
+    function reservationTimeRange(reservation) {
+      const slots = Array.isArray(reservation.normalizedSlots) ? reservation.normalizedSlots : [];
+      if (slots.length === 0) {
+        return "No time set";
       }
 
-      const calendarEl = document.getElementById("admin-calendar");
-      adminCalendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: "timeGridDay",
-        height: 640,
-        slotMinTime: openTime,
-        slotMaxTime: closeTime,
-        selectable: true,
-        events: async function(info, successCallback, failureCallback) {
-          try {
-            const data = await fetchCourtReservations(selectedCourtId);
-            successCallback(data.reservations);
-          } catch (error) {
-            failureCallback(error);
-          }
-        },
-        select: async function(info) {
-          if (!confirm(`Mark ${info.startStr} as NOT AVAILABLE?`)) {
-            return;
-          }
+      const start = slots[0];
+      const end = slots[slots.length - 1];
+      const [endHourText, endMinuteText] = end.split(":");
+      const endHour = Number(endHourText) + 1;
+      const endTime = `${String(endHour).padStart(2, "0")}:${endMinuteText}:00`;
 
-          const date = info.startStr.split("T")[0];
-          const time = info.startStr.split("T")[1].slice(0, 5);
-          const [hour, minute] = time.split(":").map(Number);
-          const endHour = hour + 1;
-          const endTime = `${endHour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
-
-          const response = await fetch("api/get_court_reservations.php", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              court_id: selectedCourtId,
-              date: date,
-              time: time,
-              end_time: endTime,
-              section_number: 9,
-              is_admin_set: 1
-            })
-          });
-
-          const result = await response.json();
-          if (result.success) {
-            alert("Slot marked as unavailable.");
-            renderAdminCalendar();
-            return;
-          }
-
-          alert("Failed to save this closure.");
-        },
-        eventClick: function(info) {
-          if (confirm(`Delete this schedule item on ${info.event.start.toLocaleString()}?`)) {
-            deleteReservation(info.event.id);
-          }
-        },
-        headerToolbar: {
-          left: "prev,next today",
-          center: "title",
-          right: "timeGridWeek,timeGridDay"
-        },
-        viewDidMount: function(info) {
-          const markButton = document.getElementById("mark-day-off-btn");
-          if (info.view.type === "timeGridDay" || info.view.type === "dayGridDay") {
-            markButton.classList.remove("hidden");
-            return;
-          }
-
-          markButton.classList.add("hidden");
-        }
-      });
-
-      adminCalendar.render();
+      return `${formatTo12Hour(start)} - ${formatTo12Hour(endTime)}`;
     }
 
-    async function deleteReservation(reservationId) {
+    function isPastSlot(slot) {
+      if (selectedDate !== today) {
+        return false;
+      }
+
+      const normalized = normalizeTime(slot);
+      if (!normalized) {
+        return false;
+      }
+
+      const now = new Date();
+      const [hourText, minuteText] = normalized.split(":");
+      const slotEnd = new Date();
+      slotEnd.setHours(Number(hourText), Number(minuteText), 0, 0);
+      slotEnd.setHours(slotEnd.getHours() + 1);
+      return slotEnd <= now;
+    }
+
+    async function refreshSchedule() {
+      const selectedCourt = getSelectedCourt();
+      if (!selectedCourt) {
+        return;
+      }
+
+      const body = document.getElementById("hourly-schedule-body");
+      body.innerHTML = '<tr><td colspan="4" class="text-sm text-slate-500">Loading hourly schedule...</td></tr>';
+
+      try {
+        const response = await fetch("api/get_court_reservations.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ court_id: selectedCourtId })
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || "Failed to load schedule.");
+        }
+
+        scheduleData = {
+          reservations: Array.isArray(result.reservations) ? result.reservations : [],
+          open_time: normalizeTime(result.open_time || selectedCourt.open_time || "08:00:00"),
+          close_time: normalizeTime(result.close_time || selectedCourt.close_time || "22:00:00")
+        };
+
+        renderScheduleTable();
+      } catch (error) {
+        body.innerHTML = `<tr><td colspan="4" class="text-sm text-rose-600">${escapeHtml(error.message || "Failed to load schedule.")}</td></tr>`;
+      }
+    }
+
+    function renderScheduleTable() {
+      const body = document.getElementById("hourly-schedule-body");
+      const selectedCourt = getSelectedCourt();
+      if (!body || !selectedCourt) {
+        return;
+      }
+
+      const slots = buildHourlySlots(scheduleData.open_time || selectedCourt.open_time, scheduleData.close_time || selectedCourt.close_time);
+      const slotMap = buildSlotMap();
+      const reservations = selectedDateReservations();
+
+      let availableCount = 0;
+      let blockedCount = 0;
+      let reservedCount = 0;
+
+      const rows = slots.map((slot) => {
+        const reservation = slotMap.get(slot) || null;
+        const past = isPastSlot(slot);
+        const endLabel = formatTo12Hour(addHour(slot));
+        let statusKey = "available";
+        let statusLabel = "Available";
+        let details = "Open for booking or venue block.";
+        let actionHtml = `<button type="button" class="admin-secondary-btn !px-4 !py-2 text-sm" onclick="blockHour('${slot}')" ${past ? "disabled" : ""}><i class="fas fa-ban"></i>Block Hour</button>`;
+
+        if (past && !reservation) {
+          statusKey = "past";
+          statusLabel = "Past";
+          details = "This hour has already passed.";
+          actionHtml = '<span class="text-sm text-slate-400">No action</span>';
+        } else if (reservation) {
+          if (Number(reservation.is_admin_set || 0) === 1) {
+            statusKey = "blocked";
+            statusLabel = "Venue Block";
+            details = `Blocked by staff • ${reservationTimeRange(reservation)}`;
+            actionHtml = `<button type="button" class="admin-secondary-btn !px-4 !py-2 text-sm" onclick="openHour(${Number(reservation.id)}, '${slot}')"><i class="fas fa-lock-open"></i>Open Hour</button>`;
+            blockedCount++;
+          } else {
+            const reservationStatus = String(reservation.game_status || "reserved").toLowerCase();
+            statusKey = statusClasses[reservationStatus] ? reservationStatus : "reserved";
+            statusLabel = statusLabels[statusKey] || "Reserved";
+            details = `${escapeHtml(reservationLabel(reservation))} • ${reservationTimeRange(reservation)}`;
+            actionHtml = '<span class="text-sm font-medium text-slate-500">Player reservation</span>';
+            reservedCount++;
+          }
+        } else {
+          availableCount++;
+        }
+
+        return `
+          <tr>
+            <td>
+              <div class="font-semibold text-slate-800">${formatTo12Hour(slot)} - ${endLabel}</div>
+            </td>
+            <td>
+              <span class="schedule-slot-status ${statusClasses[statusKey] || statusClasses.available}">
+                ${escapeHtml(statusLabel)}
+              </span>
+            </td>
+            <td class="text-sm text-slate-600">${details}</td>
+            <td>${actionHtml}</td>
+          </tr>
+        `;
+      });
+
+      body.innerHTML = rows.join("") || '<tr><td colspan="4" class="text-sm text-slate-500">No hourly slots available for this court.</td></tr>';
+
+      document.getElementById("stat-hours").textContent = `${formatTo12Hour(scheduleData.open_time)} - ${formatTo12Hour(scheduleData.close_time)}`;
+      document.getElementById("stat-available").textContent = String(availableCount);
+      document.getElementById("stat-reserved").textContent = String(reservedCount);
+      document.getElementById("stat-blocked").textContent = String(blockedCount);
+    }
+
+    function addHour(slot) {
+      const normalized = normalizeTime(slot);
+      const [hourText, minuteText] = normalized.split(":");
+      const nextHour = Number(hourText) + 1;
+      return `${String(nextHour).padStart(2, "0")}:${minuteText}:00`;
+    }
+
+    async function blockHour(slot) {
+      const selectedCourt = getSelectedCourt();
+      if (!selectedCourt) {
+        return;
+      }
+
+      if (!confirm(`Block ${selectedCourt.name} at ${formatTo12Hour(slot)} on ${selectedDate}?`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch("api/get_court_reservations.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            court_id: selectedCourtId,
+            date: selectedDate,
+            time: slot,
+            section_number: 9,
+            is_admin_set: 1
+          })
+        });
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || result.message || "Failed to block this hour.");
+        }
+
+        refreshSchedule();
+      } catch (error) {
+        alert(error.message || "Failed to block this hour.");
+      }
+    }
+
+    async function openHour(reservationId, slot) {
+      const reservation = selectedDateReservations().find((item) => Number(item.id) === Number(reservationId));
+      if (!reservation) {
+        return;
+      }
+
+      if (!confirm(`Open ${formatTo12Hour(slot)} for booking again?`)) {
+        return;
+      }
+
+      const remainingSlots = reservation.normalizedSlots.filter((time) => time !== normalizeTime(slot));
+
+      try {
+        if (remainingSlots.length === 0) {
+          await deleteReservationBlock(reservationId);
+        } else {
+          const response = await fetch("api/get_court_reservations.php", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              reservation_id: reservationId,
+              date: selectedDate,
+              time: remainingSlots,
+              section_number: reservation.section_number || 9
+            })
+          });
+          const result = await response.json();
+          if (!response.ok || !result.success) {
+            throw new Error(result.error || "Failed to update the venue block.");
+          }
+        }
+
+        refreshSchedule();
+      } catch (error) {
+        alert(error.message || "Failed to reopen this hour.");
+      }
+    }
+
+    async function deleteReservationBlock(reservationId) {
       const response = await fetch("api/get_court_reservations.php", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
@@ -301,69 +590,88 @@ $courtCount = count($courts);
       });
 
       const result = await response.json();
-      if (result.success) {
-        alert("Schedule item deleted.");
-        renderAdminCalendar();
-        return;
-      }
-
-      alert("Failed to delete this item.");
-    }
-
-    function closeScheduleModal() {
-      document.getElementById("schedule-modal").classList.add("hidden");
-      document.body.classList.remove("overflow-hidden");
-
-      if (adminCalendar) {
-        adminCalendar.destroy();
-        adminCalendar = null;
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Failed to remove the venue block.");
       }
     }
 
-    async function markWholeDayUnavailable() {
-      if (!selectedCourtId || !adminCalendar) {
+    async function blockWholeDay() {
+      const slotMap = buildSlotMap();
+      const slots = buildHourlySlots(scheduleData.open_time, scheduleData.close_time)
+        .filter((slot) => !slotMap.has(slot))
+        .filter((slot) => !isPastSlot(slot));
+
+      if (slots.length === 0) {
+        alert("There are no open hourly slots left to block on this date.");
         return;
       }
 
-      const currentDate = adminCalendar.view.currentStart.toLocaleDateString("en-CA", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit"
-      });
-
-      if (!confirm(`Mark entire ${currentDate} as closed?`)) {
+      if (!confirm(`Block ${slots.length} open hour(s) for the whole day?`)) {
         return;
       }
 
-      const response = await fetch("api/get_court_reservations.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ court_id: selectedCourtId })
-      });
+      try {
+        for (const slot of slots) {
+          const response = await fetch("api/get_court_reservations.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              court_id: selectedCourtId,
+              date: selectedDate,
+              time: slot,
+              section_number: 9,
+              is_admin_set: 1
+            })
+          });
+          const result = await response.json();
+          if (!response.ok || !result.success) {
+            throw new Error(result.error || `Failed to block ${slot}.`);
+          }
+        }
 
-      const data = await response.json();
-      const startHour = parseInt(data.open_time.split(":")[0], 10);
-      const endHour = parseInt(data.close_time.split(":")[0], 10);
-      const timeList = [];
+        refreshSchedule();
+      } catch (error) {
+        alert(error.message || "Failed to block the whole day.");
+      }
+    }
 
-      for (let hour = startHour; hour < endHour; hour++) {
-        timeList.push(`${hour.toString().padStart(2, "0")}:00`);
+    async function reopenDayBlocks() {
+      const adminBlockIds = Array.from(new Set(
+        selectedDateReservations()
+          .filter((reservation) => Number(reservation.is_admin_set || 0) === 1)
+          .map((reservation) => Number(reservation.id))
+      ));
+
+      if (adminBlockIds.length === 0) {
+        alert("There are no venue blocks to reopen on this date.");
+        return;
       }
 
-      await fetch("api/get_court_reservations.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          court_id: selectedCourtId,
-          date: currentDate,
-          time: timeList.join(","),
-          is_admin_set: 1,
-          section_number: 9
-        })
-      });
+      if (!confirm(`Reopen ${adminBlockIds.length} venue block(s) for this date?`)) {
+        return;
+      }
 
-      alert(`Marked ${currentDate} as unavailable.`);
-      adminCalendar.refetchEvents();
+      try {
+        for (const reservationId of adminBlockIds) {
+          await deleteReservationBlock(reservationId);
+        }
+
+        refreshSchedule();
+      } catch (error) {
+        alert(error.message || "Failed to reopen the venue blocks.");
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>'"]/g, function (character) {
+        return {
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          "'": "&#39;",
+          '"': "&quot;"
+        }[character];
+      });
     }
   </script>
 </body>

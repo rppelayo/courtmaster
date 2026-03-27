@@ -99,9 +99,13 @@ $courtCount = count($courts);
                 <?php endif; ?>
               </td>
               <td>
-                <div class="flex items-center gap-3">
-                  <button class="admin-action-link" onclick='editCourt(<?= json_encode($court) ?>)' type="button"><i class="fas fa-edit"></i></button>
-                  <button class="text-red-500 hover:text-red-700" onclick="deleteCourt(<?= (int) $court['id'] ?>)" type="button"><i class="fas fa-trash"></i></button>
+                <div class="flex flex-wrap items-center gap-3">
+                  <button class="admin-secondary-btn !px-4 !py-2 text-sm" onclick="openCourtSchedule(<?= (int) $court['id'] ?>)" type="button">
+                    <i class="fas fa-calendar-alt"></i>
+                    View Schedule
+                  </button>
+                  <button class="admin-action-link" onclick='editCourt(<?= json_encode($court) ?>)' type="button" title="Edit court"><i class="fas fa-edit"></i></button>
+                  <button class="text-red-500 hover:text-red-700" onclick="deleteCourt(<?= (int) $court['id'] ?>)" type="button" title="Delete court"><i class="fas fa-trash"></i></button>
                 </div>
               </td>
             </tr>
@@ -239,6 +243,17 @@ $courtCount = count($courts);
 
           alert("Error: " + data.message);
         });
+    }
+
+    function openCourtSchedule(courtId) {
+      const target = `admin_schedules.php?court_id=${courtId}`;
+
+      if (window.parent && typeof window.parent.loadPage === "function") {
+        window.parent.loadPage(target);
+        return;
+      }
+
+      window.location.href = target;
     }
 
     document.getElementById("courtForm").addEventListener("submit", function (event) {
