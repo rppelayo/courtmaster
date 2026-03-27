@@ -347,6 +347,7 @@ foreach ($courts as $index => $court) {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pickleball Admin - Court Layout</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="styles/admin-theme.css">
   <style>
     .court-layout-grid {
