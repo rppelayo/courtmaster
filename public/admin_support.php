@@ -11,6 +11,7 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
 require_once 'includes/db.php';
 require_once 'includes/admin_activity.php';
 require_once 'includes/membership.php';
+require_once 'includes/notifications.php';
 
 function supportValidDate(?string $value): ?string
 {
@@ -259,6 +260,16 @@ if ($export === 'ops-snapshot') {
              LIMIT 1000'
         )
         : [];
+    $notificationsReady = notificationsTableExists($pdo);
+    $notificationRowsForSnapshot = $notificationsReady
+        ? supportQueryAll(
+            $pdo,
+            'SELECT id, user_id, target_role, type, title, message, link_url, is_read, created_at, read_at
+             FROM notifications
+             ORDER BY created_at DESC, id DESC
+             LIMIT 2000'
+        )
+        : [];
 
     adminActivityLog($pdo, [
         'action_type' => 'snapshot_exported',
@@ -269,6 +280,7 @@ if ($export === 'ops-snapshot') {
             'user_count' => count($users),
             'reservation_count' => count($reservations),
             'activity_included' => $activityTableReady,
+            'notifications_included' => $notificationsReady,
         ],
     ]);
 
@@ -294,6 +306,7 @@ if ($export === 'ops-snapshot') {
                 'reservation_slots' => count($reservationSlots),
                 'reservation_guests' => count($reservationGuests),
                 'activity_rows' => count($activityRowsForSnapshot),
+                'notification_rows' => count($notificationRowsForSnapshot),
             ],
             'courts' => $courts,
             'users' => $users,
@@ -301,6 +314,7 @@ if ($export === 'ops-snapshot') {
             'reservation_slots' => $reservationSlots,
             'reservation_guests' => $reservationGuests,
             'admin_activity_logs' => $activityRowsForSnapshot,
+            'notifications' => $notificationRowsForSnapshot,
         ]
     );
 }

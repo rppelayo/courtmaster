@@ -5,6 +5,7 @@ session_start();
 
 require_once '../includes/db.php';
 require_once '../includes/admin_activity.php';
+require_once '../includes/notifications.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: /admin_reservations.php');
@@ -25,7 +26,7 @@ if ($reservationId <= 0) {
 
 try {
     $reservationStatement = $pdo->prepare(
-        'SELECT id, full_name, guest_name, court, date, payment_status
+        'SELECT id, user_id, full_name, guest_name, court, date, payment_status, payment_method
          FROM reservations
          WHERE id = ?
          LIMIT 1'
@@ -53,6 +54,20 @@ try {
             'previous_payment_status' => $reservation['payment_status'] ?? null,
         ],
     ]);
+
+    $reservationUserId = (int) ($reservation['user_id'] ?? 0);
+    if ($reservationUserId > 0) {
+        notificationsCreateForUser($pdo, $reservationUserId, [
+            'type' => 'payment_confirmed',
+            'title' => 'Payment confirmed',
+            'message' => sprintf(
+                'Your payment for %s on %s has been confirmed by the front desk.',
+                (string) ($reservation['court'] ?? 'your booking'),
+                (string) ($reservation['date'] ?? 'the selected date')
+            ),
+            'link_url' => 'dashboard.php',
+        ]);
+    }
 } catch (Throwable) {
     header('Location: /admin_reservations.php?error=' . rawurlencode('Failed to confirm payment.'));
     exit;

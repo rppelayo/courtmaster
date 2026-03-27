@@ -4,6 +4,7 @@ declare(strict_types=1);
 session_start();
 require_once 'includes/db.php';
 require_once 'includes/membership.php';
+require_once 'includes/notifications.php';
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: index.html');
@@ -44,6 +45,66 @@ $memberSinceLabel = membershipFormatDate((string) ($user['member_since'] ?? ''))
 $membershipExpiryRaw = trim((string) ($user['membership_expires_at'] ?? ''));
 $membershipExpiryLabel = $membershipExpiryRaw !== '' ? membershipFormatDate($membershipExpiryRaw) : 'Open-ended';
 $membershipBenefits = membershipBenefitLines((string) ($user['membership_benefits'] ?? ''), $isMember);
+$playerNotifications = notificationsFetchVisible($pdo, $userId, $role, 6);
+$playerUnreadNotifications = notificationsUnreadCount($pdo, $userId, $role);
+
+function dashboardNotificationBadgeClass(string $type): string
+{
+    return match ($type) {
+        'reservation_confirmed' => 'pill-success',
+        'payment_confirmed' => 'pill',
+        default => 'pill-muted',
+    };
+}
+
+$upcomingReminderStatement = $pdo->prepare(
+    "SELECT
+        r.id,
+        COALESCE(c.name, r.court) AS court,
+        r.date,
+        COALESCE(r.payment_status, 'pending') AS payment_status,
+        GROUP_CONCAT(DISTINCT rs.time ORDER BY rs.time) AS time_slots
+     FROM reservations r
+     LEFT JOIN courts c ON r.court_id = c.id
+     LEFT JOIN reservation_slots rs ON rs.reservation_id = r.id
+     WHERE r.user_id = ?
+       AND r.date >= CURDATE()
+     GROUP BY r.id
+     ORDER BY r.date ASC, time_slots ASC, r.id ASC
+     LIMIT 6"
+);
+$upcomingReminderStatement->execute([$userId]);
+$upcomingReminderRows = [];
+$dashboardNow = new DateTimeImmutable('now');
+foreach ($upcomingReminderStatement->fetchAll(PDO::FETCH_ASSOC) as $reminderRow) {
+    $timeSlots = array_values(array_filter(array_map('trim', explode(',', (string) ($reminderRow['time_slots'] ?? '')))));
+    if ($timeSlots === []) {
+        continue;
+    }
+
+    $startTime = notificationsNormalizeTime((string) $timeSlots[0]);
+    if ($startTime === '') {
+        continue;
+    }
+
+    $startDateTime = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', (string) $reminderRow['date'] . ' ' . $startTime);
+    if (!$startDateTime instanceof DateTimeImmutable || $startDateTime < $dashboardNow) {
+        continue;
+    }
+
+    $hoursUntil = (int) floor(($startDateTime->getTimestamp() - $dashboardNow->getTimestamp()) / 3600);
+    $upcomingReminderRows[] = [
+        'court' => (string) ($reminderRow['court'] ?? 'Court'),
+        'date' => (string) ($reminderRow['date'] ?? ''),
+        'time_range' => notificationsBuildTimeRange($timeSlots),
+        'start_at' => $startDateTime,
+        'hours_until' => $hoursUntil,
+        'payment_status' => (string) ($reminderRow['payment_status'] ?? 'pending'),
+    ];
+    if (count($upcomingReminderRows) >= 3) {
+        break;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -299,6 +360,102 @@ $membershipBenefits = membershipBenefitLines((string) ($user['membership_benefit
       </section>
 
       <aside class="space-y-6">
+        <section class="glass-card rounded-[30px] px-5 py-5">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <div class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Notifications</div>
+              <div class="mt-1 text-lg font-semibold text-slate-800">Booking updates</div>
+            </div>
+            <span class="<?= $playerUnreadNotifications > 0 ? 'rounded-full border border-amber-200 bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-amber-800 shadow-sm' : 'pill-muted rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]' ?>">
+              <?= (int) $playerUnreadNotifications ?> unread
+            </span>
+          </div>
+
+          <?php if ($playerUnreadNotifications > 0): ?>
+            <form method="post" action="api/mark_notifications_read.php" class="mt-4">
+              <input type="hidden" name="scope" value="all">
+              <input type="hidden" name="next" value="../dashboard.php">
+              <button type="submit" class="secondary-button inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold">
+                <i class="fas fa-check-double"></i>
+                Mark all read
+              </button>
+            </form>
+          <?php endif; ?>
+
+          <div class="mt-4 space-y-3">
+            <?php if ($playerNotifications === []): ?>
+              <div class="rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                New booking and payment updates will appear here.
+              </div>
+            <?php else: ?>
+              <?php foreach ($playerNotifications as $notification): ?>
+                <div class="rounded-2xl border <?= (int) ($notification['is_read'] ?? 0) === 1 ? 'border-slate-200 bg-slate-50' : 'border-amber-300 border-l-4 border-l-amber-500 bg-gradient-to-br from-amber-50 via-white to-amber-100/70 shadow-[0_12px_28px_rgba(245,158,11,0.14)] ring-1 ring-amber-200/70' ?> px-4 py-4">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span class="<?= htmlspecialchars(dashboardNotificationBadgeClass((string) ($notification['type'] ?? 'general'))) ?> rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]">
+                          <?= htmlspecialchars(str_replace('_', ' ', (string) ($notification['type'] ?? 'update'))) ?>
+                        </span>
+                        <?php if ((int) ($notification['is_read'] ?? 0) === 0): ?>
+                          <span class="inline-flex items-center gap-2 rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white shadow-sm">
+                            <span class="inline-flex h-2.5 w-2.5 rounded-full bg-white animate-pulse"></span>
+                            Unread
+                          </span>
+                        <?php endif; ?>
+                      </div>
+                      <div class="mt-3 text-base font-semibold <?= (int) ($notification['is_read'] ?? 0) === 1 ? 'text-slate-800' : 'text-amber-900' ?>"><?= htmlspecialchars((string) ($notification['title'] ?? 'Notification')) ?></div>
+                      <p class="mt-2 text-sm text-slate-600"><?= htmlspecialchars((string) ($notification['message'] ?? '')) ?></p>
+                      <div class="mt-3 text-xs uppercase tracking-[0.14em] <?= (int) ($notification['is_read'] ?? 0) === 1 ? 'text-slate-400' : 'text-amber-700' ?>"><?= htmlspecialchars(notificationsTimeAgo((string) ($notification['created_at'] ?? ''))) ?></div>
+                    </div>
+                    <div class="flex shrink-0 flex-col items-end gap-2">
+                      <?php if (!empty($notification['link_url'])): ?>
+                        <a href="<?= htmlspecialchars((string) $notification['link_url']) ?>" class="secondary-button rounded-xl px-3 py-2 text-xs font-semibold">
+                          Open
+                        </a>
+                      <?php endif; ?>
+                      <?php if ((int) ($notification['is_read'] ?? 0) === 0): ?>
+                        <form method="post" action="api/mark_notifications_read.php">
+                          <input type="hidden" name="notification_id" value="<?= (int) ($notification['id'] ?? 0) ?>">
+                          <input type="hidden" name="next" value="../dashboard.php">
+                          <button type="submit" class="text-xs font-semibold text-teal-700 hover:text-teal-800">Mark read</button>
+                        </form>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            <?php endif; ?>
+          </div>
+        </section>
+
+        <section class="glass-card rounded-[30px] px-5 py-5">
+          <div class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Upcoming Reminders</div>
+          <div class="mt-4 space-y-3 text-sm text-slate-600">
+            <?php if ($upcomingReminderRows === []): ?>
+              <div class="rounded-2xl bg-slate-50 px-4 py-4">
+                No upcoming reservations need your attention right now.
+              </div>
+            <?php else: ?>
+              <?php foreach ($upcomingReminderRows as $reminder): ?>
+                <div class="rounded-2xl bg-slate-50 px-4 py-4">
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <div class="text-base font-semibold text-slate-800"><?= htmlspecialchars($reminder['court']) ?></div>
+                      <div class="mt-1 text-sm text-slate-500"><?= htmlspecialchars(membershipFormatDate($reminder['date'])) ?> • <?= htmlspecialchars($reminder['time_range']) ?></div>
+                    </div>
+                    <span class="pill-muted rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]">
+                      <?= $reminder['hours_until'] <= 0 ? 'Soon' : htmlspecialchars((string) $reminder['hours_until']) . 'h' ?>
+                    </span>
+                  </div>
+                  <div class="mt-3 text-xs uppercase tracking-[0.14em] text-slate-400">
+                    <?= htmlspecialchars(ucfirst((string) $reminder['payment_status'])) ?> payment status
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            <?php endif; ?>
+          </div>
+        </section>
+
         <section class="glass-card rounded-[30px] px-5 py-5">
           <div class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Quick Actions</div>
           <div class="mt-4 grid gap-3">

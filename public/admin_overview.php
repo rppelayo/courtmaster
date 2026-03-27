@@ -4,6 +4,7 @@ declare(strict_types=1);
 session_start();
 require_once 'includes/db.php';
 require_once 'includes/game_status.php';
+require_once 'includes/notifications.php';
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
     header('Location: ../index.html');
@@ -110,7 +111,19 @@ function adminOverviewDateTimeLabel(?string $value): ?string
     }
 }
 
+function adminOverviewNotificationClass(string $type): string
+{
+    return match ($type) {
+        'payment_review' => 'bg-amber-100 text-amber-700',
+        'reservation_cancelled' => 'bg-rose-100 text-rose-700',
+        'payment_confirmed' => 'bg-emerald-100 text-emerald-700',
+        default => 'bg-teal-100 text-teal-700',
+    };
+}
+
 $userRole = (string) ($_SESSION['role'] ?? 'admin');
+$adminNotifications = notificationsFetchVisible($pdo, (int) ($_SESSION['user_id'] ?? 0), $userRole, 6);
+$adminUnreadNotifications = notificationsUnreadCount($pdo, (int) ($_SESSION['user_id'] ?? 0), $userRole);
 $today = (new DateTimeImmutable('today'))->format('Y-m-d');
 $now = new DateTimeImmutable('now');
 $nowTime = $now->format('H:i:s');
@@ -526,6 +539,77 @@ $lastUpdated = $now->format('M j, Y g:i A');
       </section>
 
       <div class="space-y-6">
+        <section class="admin-card">
+          <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 class="text-xl font-semibold text-slate-800">Front Desk Alerts</h2>
+              <p class="mt-1 text-sm text-slate-500">Recent booking, payment, and cancellation alerts that need staff visibility.</p>
+            </div>
+            <div class="<?= $adminUnreadNotifications > 0 ? 'inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-100 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-amber-800 shadow-sm' : 'admin-pill' ?>">
+              <?php if ($adminUnreadNotifications > 0): ?>
+                <span class="inline-flex h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+              <?php endif; ?>
+              <?= $adminUnreadNotifications ?> unread
+            </div>
+          </div>
+
+          <?php if ($adminUnreadNotifications > 0): ?>
+            <form method="post" action="api/mark_notifications_read.php" class="mb-4">
+              <input type="hidden" name="scope" value="all">
+              <input type="hidden" name="next" value="../admin_overview.php">
+              <button type="submit" class="admin-secondary-btn !px-4 !py-2">
+                <i class="fas fa-check-double"></i>
+                Mark all read
+              </button>
+            </form>
+          <?php endif; ?>
+
+          <?php if ($adminNotifications === []): ?>
+            <div class="rounded-2xl border border-dashed border-slate-300 bg-white/70 px-5 py-8 text-center text-sm text-slate-500">
+              New booking and payment alerts will appear here.
+            </div>
+          <?php else: ?>
+            <div class="grid gap-3">
+              <?php foreach ($adminNotifications as $notification): ?>
+                <div class="rounded-2xl border <?= (int) ($notification['is_read'] ?? 0) === 1 ? 'border-slate-200 bg-white/80' : 'border-amber-300 border-l-4 border-l-amber-500 bg-gradient-to-br from-amber-50 via-white to-amber-100/70 shadow-[0_12px_28px_rgba(245,158,11,0.14)] ring-1 ring-amber-200/70' ?> px-4 py-4">
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span class="admin-tag <?= htmlspecialchars(adminOverviewNotificationClass((string) ($notification['type'] ?? 'general'))) ?>">
+                          <?= htmlspecialchars(ucwords(str_replace('_', ' ', (string) ($notification['type'] ?? 'alert')))) ?>
+                        </span>
+                        <?php if ((int) ($notification['is_read'] ?? 0) === 0): ?>
+                          <span class="inline-flex items-center gap-2 rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white shadow-sm">
+                            <span class="inline-flex h-2.5 w-2.5 rounded-full bg-white animate-pulse"></span>
+                            Needs attention
+                          </span>
+                        <?php endif; ?>
+                      </div>
+                      <div class="mt-3 text-base font-semibold <?= (int) ($notification['is_read'] ?? 0) === 1 ? 'text-slate-800' : 'text-amber-900' ?>"><?= htmlspecialchars((string) ($notification['title'] ?? 'Alert')) ?></div>
+                      <div class="mt-2 text-sm text-slate-600"><?= htmlspecialchars((string) ($notification['message'] ?? '')) ?></div>
+                      <div class="mt-3 text-xs uppercase tracking-[0.14em] <?= (int) ($notification['is_read'] ?? 0) === 1 ? 'text-slate-400' : 'text-amber-700' ?>"><?= htmlspecialchars(notificationsTimeAgo((string) ($notification['created_at'] ?? ''))) ?></div>
+                    </div>
+                    <div class="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+                      <?php if (!empty($notification['link_url'])): ?>
+                        <button type="button" class="admin-secondary-btn !px-4 !py-2" onclick="if (window.parent && typeof window.parent.loadPage === 'function') { window.parent.loadPage('<?= htmlspecialchars((string) $notification['link_url']) ?>'); } else { window.location.href = '<?= htmlspecialchars((string) $notification['link_url']) ?>'; }">
+                          Open
+                        </button>
+                      <?php endif; ?>
+                      <?php if ((int) ($notification['is_read'] ?? 0) === 0): ?>
+                        <form method="post" action="api/mark_notifications_read.php">
+                          <input type="hidden" name="notification_id" value="<?= (int) ($notification['id'] ?? 0) ?>">
+                          <input type="hidden" name="next" value="../admin_overview.php">
+                          <button type="submit" class="text-xs font-semibold text-teal-700 hover:text-teal-800">Mark read</button>
+                        </form>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          <?php endif; ?>
+        </section>
+
         <section class="admin-card">
           <div class="mb-4">
             <h2 class="text-xl font-semibold text-slate-800">Checked-in / Active Games</h2>

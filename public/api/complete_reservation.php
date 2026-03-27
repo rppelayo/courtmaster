@@ -8,6 +8,7 @@ require_once '../includes/pricing.php';
 require_once '../includes/reservation_rules.php';
 require_once '../includes/game_status.php';
 require_once '../includes/membership.php';
+require_once '../includes/notifications.php';
 
 const PAYMENT_PROOF_MAX_BYTES = 5242880;
 
@@ -158,7 +159,7 @@ foreach ($required as $key) {
     }
 }
 
-$userId = $_SESSION['user_id'] ?? '';
+$userId = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : 0;
 $fullName = trim((string) $data['fullName']);
 $contactNumber = trim((string) $data['contactNumber']);
 $email = trim((string) $data['email']);
@@ -320,6 +321,49 @@ try {
     }
 
     $pdo->commit();
+
+    $scheduleSummary = notificationsBuildScheduleSummary($date, $timeSlots);
+    $paymentLabel = notificationsPaymentMethodLabel($paymentMethod);
+
+    if ($userId > 0) {
+        $playerMessage = sprintf(
+            'Your reservation for %s on %s has been saved. Payment method: %s.',
+            $court,
+            $scheduleSummary,
+            $paymentLabel
+        );
+        if ($paymentMethod === 'gcash-maya' && $paymentProofPath !== null) {
+            $playerMessage .= ' Your proof of payment is attached and waiting for staff review.';
+        }
+
+        notificationsCreateForUser($pdo, $userId, [
+            'type' => 'reservation_confirmed',
+            'title' => 'Reservation confirmed',
+            'message' => $playerMessage,
+            'link_url' => 'dashboard.php',
+        ]);
+    }
+
+    $adminTitle = $paymentMethod === 'gcash-maya'
+        ? 'Payment proof uploaded'
+        : 'New online reservation';
+    $adminMessage = sprintf(
+        '%s booked %s on %s via %s.',
+        $fullName,
+        $court,
+        $scheduleSummary,
+        $paymentLabel
+    );
+    if ($paymentMethod === 'gcash-maya' && $paymentProofPath !== null) {
+        $adminMessage .= ' Review the uploaded proof of payment.';
+    }
+
+    notificationsCreateForRole($pdo, 'admin', [
+        'type' => $paymentMethod === 'gcash-maya' ? 'payment_review' : 'reservation_created',
+        'title' => $adminTitle,
+        'message' => $adminMessage,
+        'link_url' => 'admin_reservations.php',
+    ]);
 
     respond([
         'success' => true,

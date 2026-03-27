@@ -141,6 +141,30 @@ try {
 
     applyStatement(
         $pdo,
+        'Create notifications table',
+        static fn(): bool => tableExists($pdo, $dbName, 'notifications'),
+        <<<SQL
+        CREATE TABLE notifications (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NULL,
+            target_role VARCHAR(20) NULL,
+            type VARCHAR(50) NOT NULL DEFAULT 'general',
+            title VARCHAR(160) NOT NULL,
+            message TEXT NOT NULL,
+            link_url VARCHAR(255) NULL,
+            is_read TINYINT(1) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            read_at DATETIME NULL,
+            KEY idx_notifications_user_id (user_id),
+            KEY idx_notifications_target_role (target_role),
+            KEY idx_notifications_is_read (is_read),
+            KEY idx_notifications_created_at (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+        SQL
+    );
+
+    applyStatement(
+        $pdo,
         'Add courts.member_price',
         static fn(): bool => columnExists($pdo, $dbName, 'courts', 'member_price'),
         'ALTER TABLE courts ADD COLUMN member_price DECIMAL(10,2) NULL AFTER price'
