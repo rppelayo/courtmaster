@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Player Login | Pickleball Reservations</title>
+  <script src="js/auth.js" defer></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --page-bg: #f4f8f3;
+      --page-accent: #dcefe7;
+      --surface: #ffffff;
+      --surface-soft: #edf6f1;
+      --border: #cfe0d8;
+      --text: #173630;
+      --muted: #5d776f;
+      --primary: #0f766e;
+      --primary-strong: #0b5f58;
+      --accent: #f2b66d;
+    }
+
+    body {
+      background:
+        radial-gradient(circle at top left, rgba(15, 118, 110, 0.12), transparent 32%),
+        linear-gradient(180deg, #fbfdf9 0%, var(--page-bg) 100%);
+      color: var(--text);
+    }
+
+    .login-shell {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(207, 224, 216, 0.9);
+      box-shadow: 0 30px 80px rgba(23, 54, 48, 0.12);
+      backdrop-filter: blur(10px);
+    }
+
+    .login-visual {
+      background:
+        radial-gradient(circle at top, rgba(242, 182, 109, 0.35), transparent 28%),
+        linear-gradient(180deg, #fbfdf9 0%, var(--surface-soft) 100%);
+    }
+
+    .visual-frame {
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(220, 239, 231, 0.85));
+    }
+
+    .field-input {
+      background: #fcfefd;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .field-input::placeholder {
+      color: #809891;
+    }
+
+    .primary-button {
+      background: var(--primary);
+      color: #ffffff;
+    }
+
+    .primary-button:hover {
+      background: var(--primary-strong);
+    }
+
+    .secondary-button {
+      background: #eef5f2;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .secondary-button:hover {
+      background: #e4f0eb;
+    }
+
+    .brand-link {
+      color: var(--primary);
+    }
+  </style>
+  <script>
+    function handleLogin(event) {
+      event.preventDefault();
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      login(email, password);
+    }
+
+    function continueAsGuest() {
+      sessionStorage.setItem("userType", "guest");
+      window.location.href = "reserve.html";
+    }
+  </script>
+</head>
+
+<body class="min-h-screen flex items-center justify-center px-4">
+
+  <div class="login-shell flex flex-col md:flex-row w-full max-w-6xl rounded-[28px] overflow-hidden">
+    <div class="md:w-1/2 w-full p-8 md:p-12 flex flex-col justify-between">
+      <div>
+        <div class="mb-8">
+          <a href="index.html" class="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-100">
+            <span>Back to Facility Page</span>
+          </a>
+          <h1 class="mt-5 text-4xl font-bold text-slate-800">Welcome to your pickleball booking desk</h1>
+          <p class="mt-3 text-base text-slate-500">Sign in to manage returning-player bookings or continue as guest for a quick court reservation.</p>
+        </div>
+
+        <form onsubmit="handleLogin(event)" class="space-y-5">
+          <input
+            id="email"
+            type="email"
+            placeholder="Email"
+            required
+            class="field-input w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-200"
+          >
+
+          <input
+            id="password"
+            type="password"
+            placeholder="Password"
+            required
+            class="field-input w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-200"
+          >
+
+          <button type="submit" class="primary-button w-full font-bold py-3 rounded-xl transition-all">
+            LOGIN
+          </button>
+        </form>
+
+        <button onclick="continueAsGuest()" class="secondary-button w-full mt-4 font-semibold py-3 rounded-xl transition-all">
+          Continue as Guest
+        </button>
+      </div>
+
+      <p class="mt-8 text-sm text-slate-500 text-center">
+        Don't have an account?
+        <a href="register.html" class="brand-link hover:underline">Sign up</a>
+      </p>
+    </div>
+
+    <div class="login-visual md:w-1/2 w-full flex items-center justify-center p-6">
+      <div class="visual-frame relative w-full h-full min-h-[260px] rounded-[24px] p-8 flex items-center justify-center">
+        <div class="absolute inset-4 rounded-[20px] border border-white/80"></div>
+        <div class="relative z-10 max-w-md text-center">
+          <div class="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-white/80 text-4xl shadow-sm">
+            P
+          </div>
+          <h2 class="text-3xl font-bold text-slate-800">Simple from first click</h2>
+          <p class="mt-3 text-base text-slate-600">
+            A cleaner, client-ready flow for choosing a court, picking a 1-hour slot, entering payment details, and confirming the reservation in minutes.
+          </p>
+          <div class="mt-6 grid grid-cols-2 gap-3 text-sm text-slate-700 md:grid-cols-4">
+            <div class="rounded-2xl border border-white/80 bg-white/60 px-3 py-4">
+              <div class="text-xl font-bold text-teal-700">1</div>
+              <div class="mt-1">Choose Court</div>
+            </div>
+            <div class="rounded-2xl border border-white/80 bg-white/60 px-3 py-4">
+              <div class="text-xl font-bold text-teal-700">2</div>
+              <div class="mt-1">Pick Time</div>
+            </div>
+            <div class="rounded-2xl border border-white/80 bg-white/60 px-3 py-4">
+              <div class="text-xl font-bold text-teal-700">3</div>
+              <div class="mt-1">Details &amp; Payment</div>
+            </div>
+            <div class="rounded-2xl border border-white/80 bg-white/60 px-3 py-4">
+              <div class="text-xl font-bold text-teal-700">4</div>
+              <div class="mt-1">Confirm</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

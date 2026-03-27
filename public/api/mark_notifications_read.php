@@ -50,7 +50,7 @@ function notificationRedirect(string $next, array $payload, int $statusCode = 20
 }
 
 if (!isset($_SESSION['user_id'])) {
-    notificationRedirect('../index.html', ['success' => false, 'message' => 'Unauthorized'], 403);
+    notificationRedirect('../login.html', ['success' => false, 'message' => 'Unauthorized'], 403);
 }
 
 $data = notificationRequestData();

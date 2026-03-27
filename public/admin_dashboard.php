@@ -2,7 +2,7 @@
 session_start();
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
-    header("Location: ../index.html");
+    header("Location: ../login.html");
     exit;
 }
 ?>
@@ -10,6 +10,7 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Pickleball Admin Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/js/all.min.js" integrity="sha512-b+nQTCdtTBIRIbraqNEwsjB6UvL3UEMkXnhzd8awtCYh0Kcsjl9uEgwVFVbhoj3uu1DO1ZMacNvLoyJJiNfcvg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -35,7 +36,7 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
       </div>
 
       <nav class="flex-1 p-4 space-y-3">
-        <div class="mb-2 px-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/60">Admin Menu</div>
+        <div id="admin-menu-heading" class="admin-menu-heading mb-2 px-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/60">Admin Menu</div>
         <button id="menu-admin_overview" onclick="loadPage('admin_overview.php')" class="admin-menu-btn">
           <i class="fas fa-chart-line"></i><span class="menu-label">Overview</span>
         </button>
@@ -117,22 +118,43 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
       }
     }
 
-    function toggleSidebar() {
+    function syncSidebarCollapsedState(isCollapsed) {
       const sidebar = document.getElementById("sidebar");
       const labels = document.querySelectorAll(".menu-label");
+      const title = document.getElementById("sidebar-title");
+      const menuHeading = document.getElementById("admin-menu-heading");
 
-      if (sidebar.classList.contains("w-72")) {
-        sidebar.classList.remove("w-72");
-        sidebar.classList.add("w-20");
-        labels.forEach((label) => label.classList.add("hidden"));
-        document.getElementById("sidebar-title").classList.add("hidden");
+      sidebar.classList.toggle("w-72", !isCollapsed);
+      sidebar.classList.toggle("w-20", isCollapsed);
+      sidebar.classList.toggle("admin-sidebar-collapsed", isCollapsed);
+      labels.forEach((label) => label.classList.toggle("hidden", isCollapsed));
+      title.classList.toggle("hidden", isCollapsed);
+      menuHeading.classList.toggle("hidden", isCollapsed);
+    }
+
+    function sidebarLockedOnMobile() {
+      return window.matchMedia("(max-width: 768px)").matches;
+    }
+
+    function applyResponsiveSidebar() {
+      if (sidebarLockedOnMobile()) {
+        syncSidebarCollapsedState(true);
+      }
+    }
+
+    function toggleSidebar() {
+      if (sidebarLockedOnMobile()) {
+        syncSidebarCollapsedState(true);
         return;
       }
 
-      sidebar.classList.remove("w-20");
-      sidebar.classList.add("w-72");
-      labels.forEach((label) => label.classList.remove("hidden"));
-      document.getElementById("sidebar-title").classList.remove("hidden");
+      const sidebar = document.getElementById("sidebar");
+      if (sidebar.classList.contains("w-72")) {
+        syncSidebarCollapsedState(true);
+        return;
+      }
+
+      syncSidebarCollapsedState(false);
     }
 
     window.addEventListener("DOMContentLoaded", () => {
@@ -140,7 +162,10 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
       const initialPage = iframe.getAttribute("src");
       iframe.src = cacheBustPage(initialPage);
       highlightMenu(initialPage);
+      applyResponsiveSidebar();
     });
+
+    window.addEventListener("resize", applyResponsiveSidebar);
   </script>
 </body>
 </html>

@@ -7,7 +7,7 @@ require_once 'includes/membership.php';
 require_once 'includes/notifications.php';
 
 if (!isset($_SESSION['user_id'])) {
-    header('Location: index.html');
+    header('Location: login.html');
     exit;
 }
 
@@ -15,7 +15,7 @@ $userId = (int) $_SESSION['user_id'];
 $user = membershipFetchUser($pdo, $userId);
 
 if (!is_array($user)) {
-    header('Location: index.html');
+    header('Location: login.html');
     exit;
 }
 

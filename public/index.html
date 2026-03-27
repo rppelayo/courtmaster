@@ -2,176 +2,283 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Pickleball Reservations</title>
-  <script src="js/auth.js" defer></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pickleball Courts | Reserve a Court</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root {
       --page-bg: #f4f8f3;
-      --page-accent: #dcefe7;
-      --surface: #ffffff;
-      --surface-soft: #edf6f1;
+      --surface: rgba(255, 255, 255, 0.94);
       --border: #cfe0d8;
       --text: #173630;
-      --muted: #5d776f;
+      --muted: #607a72;
       --primary: #0f766e;
       --primary-strong: #0b5f58;
       --accent: #f2b66d;
+      --shadow: 0 28px 70px rgba(23, 54, 48, 0.12);
     }
 
     body {
+      min-height: 100vh;
       background:
-        radial-gradient(circle at top left, rgba(15, 118, 110, 0.12), transparent 32%),
+        radial-gradient(circle at top left, rgba(15, 118, 110, 0.12), transparent 28%),
+        radial-gradient(circle at top right, rgba(242, 182, 109, 0.2), transparent 24%),
         linear-gradient(180deg, #fbfdf9 0%, var(--page-bg) 100%);
       color: var(--text);
     }
 
-    .login-shell {
-      background: rgba(255, 255, 255, 0.9);
-      border: 1px solid rgba(207, 224, 216, 0.9);
-      box-shadow: 0 30px 80px rgba(23, 54, 48, 0.12);
+    .glass-panel {
+      background: var(--surface);
+      border: 1px solid rgba(207, 224, 216, 0.92);
+      box-shadow: var(--shadow);
       backdrop-filter: blur(10px);
     }
 
-    .login-visual {
+    .hero-card,
+    .feature-card,
+    .detail-card,
+    .cta-card,
+    .contact-card {
+      background: #ffffff;
+      border: 1px solid rgba(207, 224, 216, 0.92);
+      box-shadow: 0 16px 36px rgba(23, 54, 48, 0.08);
+    }
+
+    .hero-card {
       background:
-        radial-gradient(circle at top, rgba(242, 182, 109, 0.35), transparent 28%),
-        linear-gradient(180deg, #fbfdf9 0%, var(--surface-soft) 100%);
-    }
-
-    .visual-frame {
-      border: 1px solid rgba(255, 255, 255, 0.8);
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(220, 239, 231, 0.85));
-    }
-
-    .field-input {
-      background: #fcfefd;
-      border: 1px solid var(--border);
-      color: var(--text);
-    }
-
-    .field-input::placeholder {
-      color: #809891;
+        radial-gradient(circle at top right, rgba(242, 182, 109, 0.18), transparent 22%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(245, 250, 247, 0.95) 100%);
     }
 
     .primary-button {
       background: var(--primary);
       color: #ffffff;
+      transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
     }
 
     .primary-button:hover {
       background: var(--primary-strong);
+      transform: translateY(-1px);
+      box-shadow: 0 18px 30px rgba(15, 118, 110, 0.2);
     }
 
-    .secondary-button {
-      background: #eef5f2;
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
-
-    .secondary-button:hover {
-      background: #e4f0eb;
-    }
-
-    .brand-link {
+    .secondary-link {
       color: var(--primary);
     }
+
+    .highlight-pill {
+      border: 1px solid rgba(15, 118, 110, 0.16);
+      background: #f5fbf8;
+      color: var(--primary);
+    }
+
+    .court-visual {
+      background:
+        linear-gradient(145deg, rgba(15, 118, 110, 0.96), rgba(42, 157, 143, 0.84)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent);
+    }
+
+    .court-line {
+      position: absolute;
+      border-color: rgba(255, 255, 255, 0.72);
+      border-style: solid;
+    }
   </style>
-  <script>
-    function handleLogin(event) {
-      event.preventDefault();
-      const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
-      login(email, password);
-    }
-
-    function continueAsGuest() {
-      sessionStorage.setItem("userType", "guest");
-      window.location.href = "reserve.html";
-    }
-  </script>
 </head>
-
-<body class="min-h-screen flex items-center justify-center px-4">
-
-  <div class="login-shell flex flex-col md:flex-row w-full max-w-6xl rounded-[28px] overflow-hidden">
-    <div class="md:w-1/2 w-full p-8 md:p-12 flex flex-col justify-between">
-      <div>
-        <div class="mb-8">
-          <div class="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800">
-            Venue Booking
+<body>
+  <div class="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+    <header class="glass-panel rounded-[30px] px-5 py-5 md:px-7">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex items-start gap-4">
+          <div class="flex h-20 w-20 shrink-0 items-center justify-center rounded-[24px] border border-dashed border-teal-300 bg-teal-50 text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">
+            Logo
           </div>
-          <h1 class="mt-5 text-4xl font-bold text-slate-800">Welcome to your pickleball booking desk</h1>
-          <p class="mt-3 text-base text-slate-500">Sign in to manage returning-player bookings or continue as guest for a quick court reservation.</p>
+          <div>
+            <div class="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold uppercase tracking-[0.18em] text-teal-800">
+              Pickleball Facility
+            </div>
+            <h1 class="mt-4 text-3xl font-bold text-slate-800 md:text-4xl">A brighter place to play, rally, and reserve your next court.</h1>
+            <p class="mt-3 max-w-3xl text-base text-slate-500">
+              Welcome to your local pickleball destination with clean courts, flexible playing hours, and a simple way to book your session online.
+            </p>
+          </div>
         </div>
 
-        <form onsubmit="handleLogin(event)" class="space-y-5">
-          <input
-            id="email"
-            type="email"
-            placeholder="Email"
-            required
-            class="field-input w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-200"
-          >
-
-          <input
-            id="password"
-            type="password"
-            placeholder="Password"
-            required
-            class="field-input w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-200"
-          >
-
-          <button type="submit" class="primary-button w-full font-bold py-3 rounded-xl transition-all">
-            LOGIN
-          </button>
-        </form>
-
-        <button onclick="continueAsGuest()" class="secondary-button w-full mt-4 font-semibold py-3 rounded-xl transition-all">
-          Continue as Guest
-        </button>
+        <div class="flex flex-col items-start gap-2 text-sm sm:items-end">
+          <a href="login.html" class="secondary-link font-semibold hover:underline">Returning player or admin? Login here</a>
+          <a href="register.html" class="text-slate-500 hover:text-teal-700 hover:underline">Need an account? Create one</a>
+        </div>
       </div>
+    </header>
 
-      <p class="mt-8 text-sm text-slate-500 text-center">
-        Don't have an account?
-        <a href="register.html" class="brand-link hover:underline">Sign up</a>
-      </p>
-    </div>
-
-    <div class="login-visual md:w-1/2 w-full flex items-center justify-center p-6">
-      <div class="visual-frame relative w-full h-full min-h-[260px] rounded-[24px] p-8 flex items-center justify-center">
-        <div class="absolute inset-4 rounded-[20px] border border-white/80"></div>
-        <div class="relative z-10 max-w-md text-center">
-          <div class="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-white/80 text-4xl shadow-sm">
-            P
+    <main class="mt-6 space-y-6">
+      <section class="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_420px]">
+        <div class="hero-card rounded-[32px] px-6 py-7 md:px-8 md:py-8">
+          <div class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800">
+            Open daily for casual play and booked sessions
           </div>
-          <h2 class="text-3xl font-bold text-slate-800">Simple from first click</h2>
-          <p class="mt-3 text-base text-slate-600">
-            A cleaner, client-ready flow for choosing a court, picking a 1-hour slot, entering payment details, and confirming the reservation in minutes.
+          <h2 class="mt-5 text-4xl font-bold leading-tight text-slate-800 md:text-5xl">
+            Reserve a court in minutes and spend more time on the game.
+          </h2>
+          <p class="mt-4 max-w-2xl text-base leading-7 text-slate-600">
+            Whether you are planning a quick practice block, a doubles meetup, or a longer evening session, the venue is set up to keep booking easy and court time smooth from arrival to checkout.
           </p>
-          <div class="mt-6 grid grid-cols-2 gap-3 text-sm text-slate-700 md:grid-cols-4">
-            <div class="rounded-2xl border border-white/80 bg-white/60 px-3 py-4">
-              <div class="text-xl font-bold text-teal-700">1</div>
-              <div class="mt-1">Choose Court</div>
+
+          <div class="mt-6 flex flex-wrap gap-3">
+            <span class="highlight-pill rounded-full px-4 py-2 text-sm font-semibold">Easy Booking</span>
+            <span class="highlight-pill rounded-full px-4 py-2 text-sm font-semibold">Flexible Hours</span>
+            <span class="highlight-pill rounded-full px-4 py-2 text-sm font-semibold">Walk-ins Welcome</span>
+          </div>
+
+          <div class="mt-8">
+            <a href="reserve.html" class="primary-button inline-flex items-center justify-center rounded-[24px] px-8 py-4 text-lg font-semibold shadow-[0_18px_34px_rgba(15,118,110,0.22)]">
+              Reserve a Court
+            </a>
+            <p class="mt-3 text-sm text-slate-500">
+              Guest booking is available right away. Login is only needed for returning-player features.
+            </p>
+          </div>
+        </div>
+
+        <aside class="court-visual relative overflow-hidden rounded-[32px] px-6 py-7 text-white md:px-8">
+          <div class="relative z-10 flex h-full flex-col justify-between">
+            <div>
+              <div class="inline-flex items-center rounded-full bg-white/14 px-4 py-2 text-sm font-semibold uppercase tracking-[0.18em]">
+                Facility Highlights
+              </div>
+              <h3 class="mt-5 text-3xl font-bold">Friendly venue flow from first click to first serve.</h3>
+              <p class="mt-4 max-w-sm text-sm leading-7 text-white/80">
+                Spacious hourly booking, easy scheduling, and a front-desk friendly setup for both advance reservations and same-day walk-ins.
+              </p>
             </div>
-            <div class="rounded-2xl border border-white/80 bg-white/60 px-3 py-4">
-              <div class="text-xl font-bold text-teal-700">2</div>
-              <div class="mt-1">Pick Time</div>
+
+              <div class="mt-8 overflow-hidden rounded-[28px] border border-white/20 bg-white/10 p-3 backdrop-blur">
+                <div class="relative aspect-[4/5] w-full overflow-hidden rounded-[22px]">
+                  <img
+                    src="images/gallery/feature.jpg"
+                    alt="Featured view of the pickleball facility"
+                    class="h-full w-full object-cover"
+                  />
+                  <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/70 via-slate-900/20 to-transparent px-5 py-5">
+                    <div class="text-sm font-semibold uppercase tracking-[0.18em] text-white/85">Featured Venue View</div>
+                    <p class="mt-2 text-sm leading-6 text-white/80">
+                      Replace this caption anytime with the actual feature line you want for the business.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="rounded-2xl border border-white/80 bg-white/60 px-3 py-4">
-              <div class="text-xl font-bold text-teal-700">3</div>
-              <div class="mt-1">Details &amp; Payment</div>
+          </aside>
+        </section>
+
+      <section class="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="feature-card rounded-[28px] px-6 py-6">
+          <div class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Easy Booking</div>
+          <h3 class="mt-3 text-2xl font-bold text-slate-800">Simple reservation flow</h3>
+          <p class="mt-3 text-sm leading-7 text-slate-600">
+            Choose a court, pick your date and time, and confirm without getting lost in extra steps.
+          </p>
+        </div>
+        <div class="feature-card rounded-[28px] px-6 py-6">
+          <div class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Flexible Hours</div>
+          <h3 class="mt-3 text-2xl font-bold text-slate-800">Morning to evening play</h3>
+          <p class="mt-3 text-sm leading-7 text-slate-600">
+            Book hourly sessions throughout the day, whether you prefer early practice or after-work games.
+          </p>
+        </div>
+        <div class="feature-card rounded-[28px] px-6 py-6">
+          <div class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Prime Location</div>
+          <h3 class="mt-3 text-2xl font-bold text-slate-800">Easy to find and visit</h3>
+          <p class="mt-3 text-sm leading-7 text-slate-600">
+            Positioned for convenient arrivals, quick drop-ins, and a smoother front-desk experience for your group.
+          </p>
+        </div>
+        <div class="feature-card rounded-[28px] px-6 py-6">
+          <div class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Quality Courts</div>
+          <h3 class="mt-3 text-2xl font-bold text-slate-800">Ready for good games</h3>
+          <p class="mt-3 text-sm leading-7 text-slate-600">
+            Multiple courts let the venue handle casual sessions, returning players, and booked blocks more comfortably.
+          </p>
+        </div>
+      </section>
+
+      <section class="detail-card rounded-[32px] px-6 py-7 md:px-8">
+        <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Court Gallery</div>
+            <h2 class="mt-2 text-3xl font-bold text-slate-800">Placeholder section for venue photos</h2>
+            <p class="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
+              Replace these blocks with actual photos of the courts, entrance, lounge area, and any standout parts of the facility.
+            </p>
+          </div>
+          <a href="reserve.html" class="primary-button inline-flex items-center justify-center rounded-2xl px-6 py-3 text-sm font-semibold">
+            Reserve a Court
+          </a>
+        </div>
+
+        <div class="mt-6 grid gap-4 md:grid-cols-3">
+          <div class="rounded-[28px] border border-dashed border-teal-300 bg-teal-50/60 px-5 py-16 text-center">
+            <div class="overflow-hidden rounded-[28px] border border-[color:var(--border)] bg-white">
+              <img
+                src="/images/gallery/court-1.jpg"
+                alt="Pickleball court view"
+                class="h-64 w-full object-cover"
+              />
             </div>
-            <div class="rounded-2xl border border-white/80 bg-white/60 px-3 py-4">
-              <div class="text-xl font-bold text-teal-700">4</div>
-              <div class="mt-1">Confirm</div>
+            <p class="mt-3 text-sm text-slate-500">Courtside angle, seating, or front-desk area</p>
+          </div>
+          <div class="rounded-[28px] border border-dashed border-teal-300 bg-teal-50/60 px-5 py-16 text-center">
+            <div class="overflow-hidden rounded-[28px] border border-[color:var(--border)] bg-white">
+              <img
+                src="/images/gallery/court-2.jpg"
+                alt="Pickleball court view"
+                class="h-64 w-full object-cover"
+              />
+            </div>
+            <p class="mt-3 text-sm text-slate-500">Court-wide action shot or hero facility image</p>
+          </div>
+          <div class="rounded-[28px] border border-dashed border-teal-300 bg-teal-50/60 px-5 py-16 text-center">
+            <div class="overflow-hidden rounded-[28px] border border-[color:var(--border)] bg-white">
+              <img
+                src="/images/gallery/court-3.jpg"
+                alt="Pickleball court view"
+                class="h-64 w-full object-cover"
+              />
+            </div>
+            <p class="mt-3 text-sm text-slate-500">Night play, group session, or venue exterior</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="mt-6">
+      <div class="contact-card rounded-[30px] px-6 py-6 md:px-8">
+        <div class="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Venue Contact</div>
+            <h2 class="mt-2 text-2xl font-bold text-slate-800">Sample front-desk details</h2>
+            <p class="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
+              Replace these sample details with the real venue address and contact number before handoff to the client.
+            </p>
+          </div>
+
+          <div class="grid gap-4 md:min-w-[320px]">
+            <div class="rounded-[24px] bg-slate-50 px-5 py-5">
+              <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Address</div>
+              <div class="mt-2 text-base font-semibold text-slate-800">123 Pioneer Avenue, Barangay Central, Quezon City</div>
+            </div>
+            <div class="rounded-[24px] bg-slate-50 px-5 py-5">
+              <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Contact Number</div>
+              <div class="mt-2 text-base font-semibold text-slate-800">0917 555 0148</div>
+            </div>
+            <div class="rounded-[24px] bg-slate-50 px-5 py-5">
+              <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Owner / Front Desk</div>
+              <div class="mt-2 text-base font-semibold text-slate-800">Sample Court Manager</div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </footer>
   </div>
-
 </body>
 </html>

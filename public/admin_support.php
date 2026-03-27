@@ -4,7 +4,7 @@ declare(strict_types=1);
 session_start();
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
-    header('Location: ../index.html');
+    header('Location: ../login.html');
     exit;
 }
 
