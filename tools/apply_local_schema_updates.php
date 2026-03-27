@@ -243,6 +243,34 @@ try {
 
     applyStatement(
         $pdo,
+        'Add reservations.game_status',
+        static fn(): bool => columnExists($pdo, $dbName, 'reservations', 'game_status'),
+        "ALTER TABLE reservations ADD COLUMN game_status VARCHAR(20) NOT NULL DEFAULT 'reserved' AFTER booking_source"
+    );
+
+    applyStatement(
+        $pdo,
+        'Add reservations.checked_in_at',
+        static fn(): bool => columnExists($pdo, $dbName, 'reservations', 'checked_in_at'),
+        'ALTER TABLE reservations ADD COLUMN checked_in_at DATETIME NULL AFTER game_status'
+    );
+
+    applyStatement(
+        $pdo,
+        'Add reservations.in_progress_at',
+        static fn(): bool => columnExists($pdo, $dbName, 'reservations', 'in_progress_at'),
+        'ALTER TABLE reservations ADD COLUMN in_progress_at DATETIME NULL AFTER checked_in_at'
+    );
+
+    applyStatement(
+        $pdo,
+        'Add reservations.completed_at',
+        static fn(): bool => columnExists($pdo, $dbName, 'reservations', 'completed_at'),
+        'ALTER TABLE reservations ADD COLUMN completed_at DATETIME NULL AFTER in_progress_at'
+    );
+
+    applyStatement(
+        $pdo,
         'Allow NULL reservations.time for multi-slot bookings',
         static fn(): bool => false,
         'ALTER TABLE reservations MODIFY COLUMN time TIME NULL DEFAULT NULL'
@@ -281,6 +309,13 @@ try {
         'Add index idx_reservations_court_id',
         static fn(): bool => indexExists($pdo, $dbName, 'reservations', 'idx_reservations_court_id'),
         'ALTER TABLE reservations ADD INDEX idx_reservations_court_id (court_id)'
+    );
+
+    applyStatement(
+        $pdo,
+        'Add index idx_reservations_game_status',
+        static fn(): bool => indexExists($pdo, $dbName, 'reservations', 'idx_reservations_game_status'),
+        'ALTER TABLE reservations ADD INDEX idx_reservations_game_status (game_status)'
     );
 
     $adminIdStmt = $pdo->query("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1");
@@ -345,6 +380,9 @@ try {
 
     $pdo->exec("UPDATE reservations SET booking_source = 'advance' WHERE booking_source IS NULL OR booking_source = ''");
     echo '[apply] Backfilled reservations.booking_source values' . PHP_EOL;
+
+    $pdo->exec("UPDATE reservations SET game_status = 'reserved' WHERE game_status IS NULL OR game_status = ''");
+    echo '[apply] Backfilled reservations.game_status values' . PHP_EOL;
 
     $pdo->exec("UPDATE reservations SET payment_status = 'pending' WHERE payment_status IS NULL OR payment_status = ''");
     echo '[apply] Backfilled reservations.payment_status values' . PHP_EOL;

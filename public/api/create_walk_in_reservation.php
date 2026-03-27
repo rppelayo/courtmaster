@@ -6,6 +6,7 @@ header('Content-Type: application/json');
 require_once '../includes/db.php';
 require_once '../includes/pricing.php';
 require_once '../includes/reservation_rules.php';
+require_once '../includes/game_status.php';
 
 function walkInResponse(array $payload, int $statusCode = 200): void
 {
@@ -66,6 +67,7 @@ $startTime = trim((string) $data['start_time']);
 $endTime = trim((string) $data['end_time']);
 $paymentMethod = trim((string) $data['payment_method']);
 $paymentStatus = trim((string) ($data['payment_status'] ?? 'paid'));
+$gameStatus = normalizeGameStatus((string) ($data['game_status'] ?? GAME_STATUS_CHECKED_IN));
 $discountType = normalizePricingDiscountType((string) ($data['discount_type'] ?? PRICING_DISCOUNT_NONE));
 $reservationInfo = trim((string) ($data['reservation_info'] ?? ''));
 $userId = (int) $_SESSION['user_id'];
@@ -128,6 +130,20 @@ $pricing = computeReservationPricing(
     ]
 );
 
+$statusTimestamp = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+$checkedInAt = null;
+$inProgressAt = null;
+$completedAt = null;
+
+if ($gameStatus === GAME_STATUS_CHECKED_IN) {
+    $checkedInAt = $statusTimestamp;
+} elseif ($gameStatus === GAME_STATUS_IN_PROGRESS) {
+    $checkedInAt = $statusTimestamp;
+    $inProgressAt = $statusTimestamp;
+} elseif ($gameStatus === GAME_STATUS_COMPLETED) {
+    $completedAt = $statusTimestamp;
+}
+
 try {
     $pdo->beginTransaction();
 
@@ -152,8 +168,12 @@ try {
             discount_amount,
             processing_fee,
             payment,
-            booking_source
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            booking_source,
+            game_status,
+            checked_in_at,
+            in_progress_at,
+            completed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
 
     $reservationStatement->execute([
@@ -177,6 +197,10 @@ try {
         $pricing['processing_fee'],
         $pricing['total'],
         'walk-in',
+        $gameStatus,
+        $checkedInAt,
+        $inProgressAt,
+        $completedAt,
     ]);
 
     $reservationId = (int) $pdo->lastInsertId();

@@ -6,6 +6,7 @@ header('Content-Type: application/json');
 require_once '../includes/db.php';
 require_once '../includes/pricing.php';
 require_once '../includes/reservation_rules.php';
+require_once '../includes/game_status.php';
 
 const PAYMENT_PROOF_MAX_BYTES = 5242880;
 
@@ -261,8 +262,9 @@ try {
             processing_fee,
             payment,
             payment_proof_path,
-            booking_source
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            booking_source,
+            game_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
 
     $insertReservation->execute([
@@ -286,6 +288,7 @@ try {
         $pricing['total'],
         $paymentProofPath,
         'advance',
+        GAME_STATUS_RESERVED,
     ]);
 
     $reservationId = (int) $pdo->lastInsertId();

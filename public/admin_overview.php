@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 session_start();
 require_once 'includes/db.php';
+require_once 'includes/game_status.php';
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
     header('Location: ../index.html');
@@ -96,6 +97,19 @@ function adminOverviewEndDateTime(string $date, ?string $timeSlots): ?DateTimeIm
     return $end instanceof DateTimeImmutable ? $end->modify('+1 hour') : null;
 }
 
+function adminOverviewDateTimeLabel(?string $value): ?string
+{
+    if (!is_string($value) || trim($value) === '') {
+        return null;
+    }
+
+    try {
+        return (new DateTimeImmutable($value))->format('M j, g:i A');
+    } catch (Throwable) {
+        return null;
+    }
+}
+
 $ownerId = (int) $_SESSION['user_id'];
 $userRole = (string) ($_SESSION['role'] ?? 'admin');
 $today = (new DateTimeImmutable('today'))->format('Y-m-d');
@@ -162,6 +176,19 @@ foreach ($todayReservations as &$reservation) {
     $reservation['hours_played'] = $hoursPlayed;
     $reservation['customer_label'] = adminOverviewCustomer($reservation);
     $reservation['time_range'] = adminOverviewTimeRange($reservation['time_slots'] ?? '');
+    $reservation['normalized_game_status'] = normalizeGameStatus((string) ($reservation['game_status'] ?? GAME_STATUS_RESERVED));
+    $reservation['game_status_label'] = (int) ($reservation['is_admin_set'] ?? 0) === 1
+        ? 'Admin Hold'
+        : gameStatusLabel((string) $reservation['normalized_game_status']);
+    $reservation['game_status_badge_class'] = (int) ($reservation['is_admin_set'] ?? 0) === 1
+        ? 'bg-slate-200 text-slate-700'
+        : gameStatusBadgeClass((string) $reservation['normalized_game_status']);
+    $reservation['game_status_note'] = match ((string) $reservation['normalized_game_status']) {
+        GAME_STATUS_CHECKED_IN => ($label = adminOverviewDateTimeLabel($reservation['checked_in_at'] ?? null)) ? 'Checked in ' . $label : 'Awaiting game start',
+        GAME_STATUS_IN_PROGRESS => ($label = adminOverviewDateTimeLabel($reservation['in_progress_at'] ?? null)) ? 'Started ' . $label : 'Game in progress',
+        GAME_STATUS_COMPLETED => ($label = adminOverviewDateTimeLabel($reservation['completed_at'] ?? null)) ? 'Completed ' . $label : 'Finished for the day',
+        default => 'Awaiting check-in',
+    };
 
     $startDateTime = adminOverviewStartDateTime((string) $reservation['date'], $reservation['time_slots'] ?? '');
     $endDateTime = adminOverviewEndDateTime((string) $reservation['date'], $reservation['time_slots'] ?? '');
@@ -185,10 +212,13 @@ foreach ($todayReservations as &$reservation) {
 
     $dailyHours += $hoursPlayed;
 
-    if ($startDateTime instanceof DateTimeImmutable && $endDateTime instanceof DateTimeImmutable) {
-        if ($startDateTime <= $now && $endDateTime > $now) {
+    if ((int) ($reservation['is_admin_set'] ?? 0) !== 1
+        && $startDateTime instanceof DateTimeImmutable
+        && $endDateTime instanceof DateTimeImmutable
+    ) {
+        if (gameStatusIsActive((string) $reservation['normalized_game_status'])) {
             $activeGames[] = $reservation;
-        } elseif ($startDateTime > $now) {
+        } elseif ((string) $reservation['normalized_game_status'] !== GAME_STATUS_COMPLETED && $startDateTime > $now) {
             $upcomingToday[] = $reservation;
         }
     }
@@ -196,6 +226,20 @@ foreach ($todayReservations as &$reservation) {
 unset($reservation);
 
 usort($activeGames, static function (array $first, array $second): int {
+    $statusOrder = [
+        GAME_STATUS_IN_PROGRESS => 0,
+        GAME_STATUS_CHECKED_IN => 1,
+        GAME_STATUS_RESERVED => 2,
+        GAME_STATUS_COMPLETED => 3,
+    ];
+
+    $firstOrder = $statusOrder[(string) ($first['normalized_game_status'] ?? GAME_STATUS_RESERVED)] ?? 99;
+    $secondOrder = $statusOrder[(string) ($second['normalized_game_status'] ?? GAME_STATUS_RESERVED)] ?? 99;
+
+    if ($firstOrder !== $secondOrder) {
+        return $firstOrder <=> $secondOrder;
+    }
+
     return strcmp((string) ($first['end_time_label'] ?? ''), (string) ($second['end_time_label'] ?? ''));
 });
 
@@ -227,14 +271,27 @@ foreach ($courts as $court) {
     );
 
     $activeReservation = null;
+    $currentReservedReservation = null;
     $nextReservation = null;
     foreach ($courtReservations as $reservation) {
+        if ((int) ($reservation['is_admin_set'] ?? 0) === 1) {
+            continue;
+        }
+
         $startDateTime = adminOverviewStartDateTime((string) $reservation['date'], $reservation['time_slots'] ?? '');
         $endDateTime = adminOverviewEndDateTime((string) $reservation['date'], $reservation['time_slots'] ?? '');
         if ($startDateTime instanceof DateTimeImmutable && $endDateTime instanceof DateTimeImmutable) {
-            if ($startDateTime <= $now && $endDateTime > $now) {
+            if (gameStatusIsActive((string) ($reservation['normalized_game_status'] ?? GAME_STATUS_RESERVED))) {
                 $activeReservation = $reservation;
                 break;
+            }
+
+            if ($startDateTime <= $now
+                && $endDateTime > $now
+                && (string) ($reservation['normalized_game_status'] ?? GAME_STATUS_RESERVED) === GAME_STATUS_RESERVED
+                && $currentReservedReservation === null
+            ) {
+                $currentReservedReservation = $reservation;
             }
 
             if ($startDateTime > $now && $nextReservation === null) {
@@ -251,11 +308,20 @@ foreach ($courts as $court) {
         $statusLabel = 'Occupied';
         $statusClass = 'bg-amber-100 text-amber-700';
         $statusCopy = sprintf(
-            '%s until %s',
+            '%s: %s until %s',
+            gameStatusLabel((string) ($activeReservation['normalized_game_status'] ?? GAME_STATUS_RESERVED)),
             adminOverviewCustomer($activeReservation),
             adminOverviewFormatTo12Hour((string) ($activeReservation['end_time_label'] ?? $nowTime))
         );
         $occupiedCourtCount++;
+    } elseif ($currentReservedReservation !== null) {
+        $statusLabel = 'Reserved Now';
+        $statusClass = 'bg-blue-100 text-blue-700';
+        $statusCopy = sprintf(
+            'Waiting for check-in: %s until %s',
+            adminOverviewCustomer($currentReservedReservation),
+            adminOverviewFormatTo12Hour((string) ($currentReservedReservation['end_time_label'] ?? $nowTime))
+        );
     } elseif ($openDateTime instanceof DateTimeImmutable && $now < $openDateTime) {
         $statusLabel = 'Opens Later';
         $statusClass = 'bg-blue-100 text-blue-700';
@@ -308,6 +374,43 @@ $lastUpdated = $now->format('M j, Y g:i A');
   <title>Pickleball Admin - Overview</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="styles/admin-theme.css">
+  <script>
+    async function updateReservationGameStatus(reservationId, gameStatus, triggerElement = null, fallbackValue = null) {
+      if (triggerElement) {
+        triggerElement.disabled = true;
+      }
+
+      try {
+        const response = await fetch("api/update_game_status.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: reservationId, game_status: gameStatus })
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || "Failed to update game status.");
+        }
+
+        window.location.reload();
+      } catch (error) {
+        if (triggerElement && fallbackValue !== null && triggerElement.tagName === "SELECT") {
+          triggerElement.value = fallbackValue;
+        }
+
+        if (triggerElement) {
+          triggerElement.disabled = false;
+        }
+
+        alert(error.message || "Failed to update game status.");
+      }
+    }
+
+    function handleOverviewStatusChange(selectElement, reservationId) {
+      const previousStatus = selectElement.dataset.currentStatus || selectElement.value;
+      updateReservationGameStatus(reservationId, selectElement.value, selectElement, previousStatus);
+    }
+  </script>
 </head>
 <body class="admin-theme-body admin-frame-body">
   <div class="admin-page-shell">
@@ -332,9 +435,9 @@ $lastUpdated = $now->format('M j, Y g:i A');
         <div class="mt-2 text-sm text-slate-500"><?= $dailyHours ?> reserved hour<?= $dailyHours === 1 ? '' : 's' ?> today</div>
       </div>
       <div class="admin-stat-card">
-        <div class="admin-stat-label">Active Games</div>
+        <div class="admin-stat-label">Checked-in / Active</div>
         <div class="admin-stat-value"><?= count($activeGames) ?></div>
-        <div class="mt-2 text-sm text-slate-500"><?= $occupiedCourtCount ?> court<?= $occupiedCourtCount === 1 ? '' : 's' ?> currently occupied</div>
+        <div class="mt-2 text-sm text-slate-500"><?= $occupiedCourtCount ?> court<?= $occupiedCourtCount === 1 ? '' : 's' ?> currently marked live</div>
       </div>
       <div class="admin-stat-card">
         <div class="admin-stat-label">Daily Income</div>
@@ -371,6 +474,7 @@ $lastUpdated = $now->format('M j, Y g:i A');
                   <th>Customer</th>
                   <th>Time</th>
                   <th>Type</th>
+                  <th>Game Status</th>
                   <th>Payment</th>
                   <th>Total</th>
                 </tr>
@@ -398,6 +502,27 @@ $lastUpdated = $now->format('M j, Y g:i A');
                       <span class="admin-tag <?= $sourceClass ?>"><?= htmlspecialchars($sourceLabel) ?></span>
                     </td>
                     <td>
+                      <div class="flex min-w-[11rem] flex-col gap-2">
+                        <span class="admin-tag <?= htmlspecialchars((string) $reservation['game_status_badge_class']) ?>"><?= htmlspecialchars((string) $reservation['game_status_label']) ?></span>
+                        <?php if ((int) ($reservation['is_admin_set'] ?? 0) !== 1): ?>
+                          <select
+                            class="admin-select !py-2 !text-sm"
+                            data-current-status="<?= htmlspecialchars((string) $reservation['normalized_game_status']) ?>"
+                            onchange="handleOverviewStatusChange(this, <?= (int) $reservation['id'] ?>)"
+                          >
+                            <?php foreach (gameStatusSelectOptions() as $statusValue => $statusLabel): ?>
+                              <option value="<?= htmlspecialchars($statusValue) ?>" <?= (string) $reservation['normalized_game_status'] === $statusValue ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($statusLabel) ?>
+                              </option>
+                            <?php endforeach; ?>
+                          </select>
+                          <div class="text-xs text-slate-500"><?= htmlspecialchars((string) $reservation['game_status_note']) ?></div>
+                        <?php else: ?>
+                          <div class="text-xs text-slate-500">Court availability block</div>
+                        <?php endif; ?>
+                      </div>
+                    </td>
+                    <td>
                       <div class="font-medium text-slate-800"><?= htmlspecialchars($paymentMethod) ?></div>
                       <span class="admin-tag mt-2 <?= $paymentClass ?>"><?= htmlspecialchars(ucfirst($paymentStatus)) ?></span>
                     </td>
@@ -413,28 +538,44 @@ $lastUpdated = $now->format('M j, Y g:i A');
       <div class="space-y-6">
         <section class="admin-card">
           <div class="mb-4">
-            <h2 class="text-xl font-semibold text-slate-800">Currently Active Games</h2>
-            <p class="mt-1 text-sm text-slate-500">Time-based live view using today's booked slots.</p>
+            <h2 class="text-xl font-semibold text-slate-800">Checked-in / Active Games</h2>
+            <p class="mt-1 text-sm text-slate-500">Manual front-desk workflow for reservations that have checked in, started playing, or just finished.</p>
           </div>
 
           <?php if ($activeGames === []): ?>
             <div class="rounded-2xl border border-dashed border-slate-300 bg-white/70 px-5 py-8 text-center text-sm text-slate-500">
-              No courts are active right now.
+              No reservations are marked checked-in or in progress right now.
             </div>
           <?php else: ?>
             <div class="grid gap-3">
               <?php foreach ($activeGames as $reservation): ?>
+                <?php $nextAction = gameStatusNextAction((string) ($reservation['normalized_game_status'] ?? GAME_STATUS_RESERVED)); ?>
                 <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
                   <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <div class="text-sm font-semibold uppercase tracking-[0.16em] text-amber-700">Live Now</div>
+                      <div class="text-sm font-semibold uppercase tracking-[0.16em] text-amber-700">Front Desk Workflow</div>
                       <div class="mt-2 text-lg font-semibold text-slate-800"><?= htmlspecialchars((string) $reservation['display_court']) ?></div>
                       <div class="mt-1 text-sm text-slate-600"><?= htmlspecialchars((string) $reservation['customer_label']) ?></div>
                     </div>
-                    <div class="admin-tag bg-amber-100 text-amber-700"><?= htmlspecialchars((string) $reservation['time_range']) ?></div>
+                    <div class="flex flex-col items-start gap-2 sm:items-end">
+                      <div class="admin-tag <?= htmlspecialchars((string) $reservation['game_status_badge_class']) ?>"><?= htmlspecialchars((string) $reservation['game_status_label']) ?></div>
+                      <div class="admin-tag bg-amber-100 text-amber-700"><?= htmlspecialchars((string) $reservation['time_range']) ?></div>
+                    </div>
                   </div>
-                  <div class="mt-3 text-sm text-slate-600">
-                    Ends at <?= htmlspecialchars(adminOverviewFormatTo12Hour((string) ($reservation['end_time_label'] ?? $nowTime))) ?>
+                  <div class="mt-3 flex flex-col gap-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div>Ends at <?= htmlspecialchars(adminOverviewFormatTo12Hour((string) ($reservation['end_time_label'] ?? $nowTime))) ?></div>
+                      <div class="mt-1 text-xs text-slate-500"><?= htmlspecialchars((string) $reservation['game_status_note']) ?></div>
+                    </div>
+                    <?php if (is_array($nextAction)): ?>
+                      <button
+                        type="button"
+                        class="admin-secondary-btn !px-4 !py-2"
+                        onclick="updateReservationGameStatus(<?= (int) $reservation['id'] ?>, '<?= htmlspecialchars($nextAction['status']) ?>', this)"
+                      >
+                        <?= htmlspecialchars($nextAction['label']) ?>
+                      </button>
+                    <?php endif; ?>
                   </div>
                 </div>
               <?php endforeach; ?>
@@ -541,7 +682,10 @@ $lastUpdated = $now->format('M j, Y g:i A');
                   <div class="text-sm font-semibold uppercase tracking-[0.16em] text-teal-700"><?= htmlspecialchars((string) $reservation['display_court']) ?></div>
                   <div class="mt-2 text-lg font-semibold text-slate-800"><?= htmlspecialchars((string) $reservation['customer_label']) ?></div>
                 </div>
-                <span class="admin-tag bg-blue-100 text-blue-700"><?= htmlspecialchars((string) $reservation['time_range']) ?></span>
+                <div class="flex flex-col items-end gap-2">
+                  <span class="admin-tag bg-blue-100 text-blue-700"><?= htmlspecialchars((string) $reservation['time_range']) ?></span>
+                  <span class="admin-tag <?= htmlspecialchars((string) $reservation['game_status_badge_class']) ?>"><?= htmlspecialchars((string) $reservation['game_status_label']) ?></span>
+                </div>
               </div>
               <div class="mt-3 text-sm text-slate-600">
                 <?= htmlspecialchars(ucfirst((string) ($reservation['booking_source'] ?? 'advance'))) ?> booking | <?= htmlspecialchars(ucfirst((string) ($reservation['payment_status'] ?? 'pending'))) ?> payment

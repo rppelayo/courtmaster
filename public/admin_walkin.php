@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once "includes/db.php";
+require_once "includes/game_status.php";
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
     header("Location: ../index.html");
@@ -528,6 +529,7 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
         discount_type: document.getElementById("walk-in-discount-type").value,
         payment_method: document.getElementById("walk-in-payment-method").value,
         payment_status: document.getElementById("walk-in-payment-status").value,
+        game_status: document.getElementById("walk-in-game-status").value,
         reservation_info: document.getElementById("walk-in-notes").value,
         client_local_now: buildClientLocalTimestamp(),
         client_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || ""
@@ -664,6 +666,17 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
             </select>
           </div>
 
+          <div>
+            <label for="walk-in-game-status" class="admin-field-label">Initial Game Status</label>
+            <select id="walk-in-game-status" class="admin-select" required>
+              <?php foreach (gameStatusSelectOptions() as $statusValue => $statusLabel): ?>
+                <option value="<?= htmlspecialchars($statusValue) ?>" <?= $statusValue === GAME_STATUS_CHECKED_IN ? 'selected' : '' ?>>
+                  <?= htmlspecialchars($statusLabel) ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+
           <div class="lg:col-span-2">
             <label for="walk-in-notes" class="admin-field-label">Notes</label>
             <textarea id="walk-in-notes" rows="3" class="admin-textarea" placeholder="Optional front desk notes"></textarea>
@@ -751,6 +764,7 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
                 <th>Court</th>
                 <th>Date</th>
                 <th>Time</th>
+                <th>Status</th>
                 <th>Payment</th>
                 <th>Created</th>
               </tr>
@@ -761,6 +775,7 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
                 $paymentStatus = strtolower((string) ($reservation['payment_status'] ?? 'pending'));
                 $paymentStatusClass = $paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700';
                 $paymentMethod = ucfirst(str_replace('-', ' ', (string) ($reservation['payment_method'] ?? 'n/a')));
+                $gameStatus = normalizeGameStatus((string) ($reservation['game_status'] ?? GAME_STATUS_RESERVED));
                 ?>
                 <tr>
                   <td><?= (int) $reservation['id'] ?></td>
@@ -768,6 +783,11 @@ $recentWalkIns = $recentWalkInsStatement->fetchAll(PDO::FETCH_ASSOC);
                   <td><?= htmlspecialchars((string) ($reservation['display_court'] ?? $reservation['court'])) ?></td>
                   <td><?= htmlspecialchars((string) $reservation['date']) ?></td>
                   <td><?= htmlspecialchars(adminWalkInTimeRange($reservation['time_slots'] ?? '')) ?></td>
+                  <td>
+                    <span class="admin-tag <?= htmlspecialchars(gameStatusBadgeClass($gameStatus)) ?>">
+                      <?= htmlspecialchars(gameStatusLabel($gameStatus)) ?>
+                    </span>
+                  </td>
                   <td>
                     <div class="font-medium text-slate-800"><?= htmlspecialchars($paymentMethod) ?></div>
                     <span class="admin-tag mt-2 <?= $paymentStatusClass ?>"><?= htmlspecialchars(ucfirst($paymentStatus)) ?></span>

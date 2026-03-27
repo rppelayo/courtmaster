@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once "includes/db.php";
+require_once "includes/game_status.php";
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? 'user') === 'user') {
     header("Location: ../index.html");
@@ -163,6 +164,42 @@ foreach ($reservations as $reservation) {
       reservedSlots: [],
       price: 0
     };
+
+    async function updateReservationGameStatus(reservationId, gameStatus, triggerElement = null, fallbackValue = null) {
+      if (triggerElement) {
+        triggerElement.disabled = true;
+      }
+
+      try {
+        const response = await fetch("api/update_game_status.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: reservationId, game_status: gameStatus })
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || "Failed to update game status.");
+        }
+
+        window.location.reload();
+      } catch (error) {
+        if (triggerElement && fallbackValue !== null && triggerElement.tagName === "SELECT") {
+          triggerElement.value = fallbackValue;
+        }
+
+        if (triggerElement) {
+          triggerElement.disabled = false;
+        }
+
+        alert(error.message || "Failed to update game status.");
+      }
+    }
+
+    function handleReservationStatusChange(selectElement, reservationId) {
+      const previousStatus = selectElement.dataset.currentStatus || selectElement.value;
+      updateReservationGameStatus(reservationId, selectElement.value, selectElement, previousStatus);
+    }
 
     document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("edit-date").addEventListener("change", refreshEditAvailability);
@@ -622,6 +659,7 @@ foreach ($reservations as $reservation) {
               <th>Date</th>
               <th>Time</th>
               <th>Hours</th>
+              <th>Game Status</th>
               <th>Payment</th>
               <th>Created</th>
               <th>Actions</th>
@@ -642,6 +680,10 @@ foreach ($reservations as $reservation) {
               $timeRange = adminReservationTimeRange($reservation['time_slots'] ?? '');
               $hoursPlayed = adminReservationHours($reservation['time_slots'] ?? '');
               $paymentMethod = ucfirst(str_replace('-', ' ', (string) ($reservation['payment_method'] ?? 'n/a')));
+              $gameStatus = normalizeGameStatus((string) ($reservation['game_status'] ?? GAME_STATUS_RESERVED));
+              $gameStatusLabel = (int) ($reservation['is_admin_set'] ?? 0) === 1 ? 'Admin Hold' : gameStatusLabel($gameStatus);
+              $gameStatusClass = (int) ($reservation['is_admin_set'] ?? 0) === 1 ? 'bg-slate-200 text-slate-700' : gameStatusBadgeClass($gameStatus);
+              $nextAction = (int) ($reservation['is_admin_set'] ?? 0) === 1 ? null : gameStatusNextAction($gameStatus);
               ?>
               <tr>
                 <td><?= (int) $reservation['id'] ?></td>
@@ -652,12 +694,42 @@ foreach ($reservations as $reservation) {
                 <td><?= htmlspecialchars($timeRange) ?></td>
                 <td><?= htmlspecialchars((string) $hoursPlayed) ?></td>
                 <td>
+                  <div class="flex min-w-[11rem] flex-col gap-2">
+                    <span class="admin-tag <?= htmlspecialchars($gameStatusClass) ?>"><?= htmlspecialchars($gameStatusLabel) ?></span>
+                    <?php if ((int) ($reservation['is_admin_set'] ?? 0) !== 1): ?>
+                      <select
+                        class="admin-select !py-2 !text-sm"
+                        data-current-status="<?= htmlspecialchars($gameStatus) ?>"
+                        onchange="handleReservationStatusChange(this, <?= (int) $reservation['id'] ?>)"
+                      >
+                        <?php foreach (gameStatusSelectOptions() as $statusValue => $statusLabel): ?>
+                          <option value="<?= htmlspecialchars($statusValue) ?>" <?= $gameStatus === $statusValue ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($statusLabel) ?>
+                          </option>
+                        <?php endforeach; ?>
+                      </select>
+                    <?php else: ?>
+                      <div class="text-xs text-slate-500">Court availability block</div>
+                    <?php endif; ?>
+                  </div>
+                </td>
+                <td>
                   <div class="font-medium text-slate-800"><?= htmlspecialchars($paymentMethod) ?></div>
                   <span class="admin-tag mt-2 <?= $paymentStatusClass ?>"><?= htmlspecialchars(ucfirst($paymentStatus)) ?></span>
                 </td>
                 <td class="text-sm text-slate-600"><?= htmlspecialchars((string) $reservation['created_at']) ?></td>
                 <td>
                   <div class="flex items-center gap-3">
+                    <?php if (is_array($nextAction)): ?>
+                      <button
+                        type="button"
+                        class="admin-action-link"
+                        onclick="updateReservationGameStatus(<?= (int) $reservation['id'] ?>, '<?= htmlspecialchars($nextAction['status']) ?>', this)"
+                        title="<?= htmlspecialchars($nextAction['label']) ?>"
+                      >
+                        <i class="fas <?= htmlspecialchars($nextAction['icon']) ?>"></i>
+                      </button>
+                    <?php endif; ?>
                     <button onclick="openEditModal(<?= (int) $reservation['id'] ?>)" class="admin-action-link" type="button"><i class="fas fa-edit"></i></button>
                     <form method="post" action="/api/delete_reservation.php" onsubmit="return confirm('Delete this reservation?')">
                       <input type="hidden" name="id" value="<?= (int) $reservation['id'] ?>">
