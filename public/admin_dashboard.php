@@ -58,6 +58,9 @@ include 'chatbox.php';
         <button id="menu-admin_reservations" onclick="loadPage('admin_reservations.php')" class="admin-menu-btn">
           <i class="fas fa-receipt"></i><span class="menu-label">Reservations</span>
         </button>
+        <button id="menu-admin_reports" onclick="loadPage('admin_reports.php')" class="admin-menu-btn">
+          <i class="fas fa-chart-column"></i><span class="menu-label">Reports</span>
+        </button>
       </nav>
 
       <div class="p-4">
@@ -73,7 +76,7 @@ include 'chatbox.php';
           <div>
             <div class="admin-overline">Back Office</div>
             <div class="admin-topbar-title">Pickleball Venue Operations</div>
-            <div class="admin-topbar-copy">Start from the live overview, then jump into courts, schedules, walk-ins, reservations, and staff-side activity from one place.</div>
+            <div class="admin-topbar-copy">Start from the live overview, then jump into courts, schedules, walk-ins, reservations, reports, and staff-side activity from one place.</div>
           </div>
           <div class="admin-pill"><?php echo htmlspecialchars(ucfirst((string) $_SESSION['role'])); ?> Access</div>
         </div>
