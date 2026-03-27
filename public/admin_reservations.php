@@ -71,6 +71,31 @@ function adminReservationCustomer(array $reservation): string
     return 'Reservation';
 }
 
+function adminReservationProofPath(?string $relativePath): ?string
+{
+    $path = trim((string) $relativePath);
+    if ($path === '' || str_contains($path, '..')) {
+        return null;
+    }
+
+    return str_starts_with($path, 'uploads/payment-proofs/') ? $path : null;
+}
+
+function adminReservationProofLabel(?string $relativePath): string
+{
+    $path = adminReservationProofPath($relativePath);
+    if ($path === null) {
+        return 'No proof uploaded';
+    }
+
+    $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+    return match ($extension) {
+        'pdf' => 'PDF proof uploaded',
+        'jpg', 'jpeg', 'png', 'webp' => 'Image proof uploaded',
+        default => 'Proof uploaded',
+    };
+}
+
 $userRole = (string) ($_SESSION['role'] ?? 'admin');
 $searchTerm = trim((string) ($_GET['search'] ?? ''));
 $params = [];
@@ -156,6 +181,81 @@ foreach ($reservations as $reservation) {
       reservedSlots: [],
       price: 0
     };
+
+    function normalizeProofPath(value) {
+      const path = String(value || "").trim();
+      if (!path || path.includes("..")) {
+        return "";
+      }
+
+      return path.startsWith("uploads/payment-proofs/") ? path : "";
+    }
+
+    function proofIsImage(path) {
+      return /\.(png|jpe?g|webp)$/i.test(path);
+    }
+
+    function proofIsPdf(path) {
+      return /\.pdf$/i.test(path);
+    }
+
+    function applyEditPaymentProof(path) {
+      const panel = document.getElementById("edit-payment-proof-panel");
+      const link = document.getElementById("edit-payment-proof-link");
+      const fileType = document.getElementById("edit-payment-proof-type");
+      const emptyState = document.getElementById("edit-payment-proof-empty");
+      const imagePreview = document.getElementById("edit-payment-proof-image");
+      const pdfPreview = document.getElementById("edit-payment-proof-pdf");
+      const normalizedPath = normalizeProofPath(path);
+
+      if (!panel || !link || !fileType || !emptyState || !imagePreview || !pdfPreview) {
+        return;
+      }
+
+      if (!normalizedPath) {
+        panel.classList.add("hidden");
+        emptyState.classList.remove("hidden");
+        link.href = "#";
+        link.setAttribute("aria-disabled", "true");
+        link.classList.add("opacity-50", "pointer-events-none");
+        imagePreview.classList.add("hidden");
+        imagePreview.removeAttribute("src");
+        pdfPreview.classList.add("hidden");
+        pdfPreview.removeAttribute("src");
+        fileType.textContent = "No proof uploaded for this reservation.";
+        return;
+      }
+
+      panel.classList.remove("hidden");
+      emptyState.classList.add("hidden");
+      link.href = normalizedPath;
+      link.removeAttribute("aria-disabled");
+      link.classList.remove("opacity-50", "pointer-events-none");
+
+      if (proofIsImage(normalizedPath)) {
+        fileType.textContent = "Image proof uploaded";
+        imagePreview.src = normalizedPath;
+        imagePreview.classList.remove("hidden");
+        pdfPreview.classList.add("hidden");
+        pdfPreview.removeAttribute("src");
+        return;
+      }
+
+      if (proofIsPdf(normalizedPath)) {
+        fileType.textContent = "PDF proof uploaded";
+        pdfPreview.src = normalizedPath;
+        pdfPreview.classList.remove("hidden");
+        imagePreview.classList.add("hidden");
+        imagePreview.removeAttribute("src");
+        return;
+      }
+
+      fileType.textContent = "Proof uploaded";
+      imagePreview.classList.add("hidden");
+      imagePreview.removeAttribute("src");
+      pdfPreview.classList.add("hidden");
+      pdfPreview.removeAttribute("src");
+    }
 
     async function updateReservationGameStatus(reservationId, gameStatus, triggerElement = null, fallbackValue = null) {
       if (triggerElement) {
@@ -499,12 +599,14 @@ foreach ($reservations as $reservation) {
       document.getElementById("payment_status_field").value = reservation.payment_status || "pending";
       document.getElementById("section-container").style.display = String(reservation.section_number) === "0" ? "none" : "block";
       document.getElementById("edit-section").value = reservation.section_number || 0;
+      applyEditPaymentProof(reservation.payment_proof_path || "");
       applyEditContext(data, true);
       document.getElementById("editModal").classList.remove("hidden");
       document.body.classList.add("overflow-hidden");
     }
 
     function closeEditModal() {
+      applyEditPaymentProof("");
       document.getElementById("editModal").classList.add("hidden");
       document.body.classList.remove("overflow-hidden");
     }
@@ -672,6 +774,8 @@ foreach ($reservations as $reservation) {
               $timeRange = adminReservationTimeRange($reservation['time_slots'] ?? '');
               $hoursPlayed = adminReservationHours($reservation['time_slots'] ?? '');
               $paymentMethod = ucfirst(str_replace('-', ' ', (string) ($reservation['payment_method'] ?? 'n/a')));
+              $paymentProofPath = adminReservationProofPath($reservation['payment_proof_path'] ?? null);
+              $paymentProofLabel = adminReservationProofLabel($paymentProofPath);
               $gameStatus = normalizeGameStatus((string) ($reservation['game_status'] ?? GAME_STATUS_RESERVED));
               $gameStatusLabel = (int) ($reservation['is_admin_set'] ?? 0) === 1 ? 'Admin Hold' : gameStatusLabel($gameStatus);
               $gameStatusClass = (int) ($reservation['is_admin_set'] ?? 0) === 1 ? 'bg-slate-200 text-slate-700' : gameStatusBadgeClass($gameStatus);
@@ -708,6 +812,11 @@ foreach ($reservations as $reservation) {
                 <td>
                   <div class="font-medium text-slate-800"><?= htmlspecialchars($paymentMethod) ?></div>
                   <span class="admin-tag mt-2 <?= $paymentStatusClass ?>"><?= htmlspecialchars(ucfirst($paymentStatus)) ?></span>
+                  <?php if ($paymentProofPath !== null): ?>
+                    <div class="mt-2">
+                      <span class="admin-tag bg-blue-100 text-blue-700"><?= htmlspecialchars($paymentProofLabel) ?></span>
+                    </div>
+                  <?php endif; ?>
                 </td>
                 <td class="text-sm text-slate-600"><?= htmlspecialchars((string) $reservation['created_at']) ?></td>
                 <td>
@@ -723,6 +832,17 @@ foreach ($reservations as $reservation) {
                       </button>
                     <?php endif; ?>
                     <button onclick="openEditModal(<?= (int) $reservation['id'] ?>)" class="admin-action-link" type="button"><i class="fas fa-edit"></i></button>
+                    <?php if ($paymentProofPath !== null): ?>
+                      <a
+                        href="<?= htmlspecialchars($paymentProofPath) ?>"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="admin-action-link"
+                        title="View proof of payment"
+                      >
+                        <i class="fas fa-paperclip"></i>
+                      </a>
+                    <?php endif; ?>
                     <form method="post" action="/api/delete_reservation.php" onsubmit="return confirm('Delete this reservation?')">
                       <input type="hidden" name="id" value="<?= (int) $reservation['id'] ?>">
                       <button class="text-red-500 transition hover:text-red-700" type="submit"><i class="fas fa-trash"></i></button>
@@ -779,6 +899,43 @@ foreach ($reservations as $reservation) {
             <label class="admin-field-label" for="edit-date">Date</label>
             <input type="date" name="date" id="edit-date" class="admin-input">
           </div>
+        </div>
+
+        <div id="edit-payment-proof-panel" class="hidden rounded-2xl border border-blue-200 bg-blue-50/70 px-4 py-4">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div class="text-sm font-semibold text-slate-800">Proof of Payment</div>
+              <p id="edit-payment-proof-type" class="mt-1 text-sm text-slate-500">No proof uploaded for this reservation.</p>
+            </div>
+            <a
+              id="edit-payment-proof-link"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="admin-secondary-btn !px-4 !py-2 opacity-50 pointer-events-none"
+            >
+              <i class="fas fa-up-right-from-square"></i>
+              Open Proof
+            </a>
+          </div>
+
+          <div id="edit-payment-proof-empty" class="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white/80 px-4 py-5 text-sm text-slate-500">
+            Uploads from GCash / Maya reservations will appear here.
+          </div>
+
+          <img
+            id="edit-payment-proof-image"
+            src=""
+            alt="Proof of payment preview"
+            class="mt-4 hidden max-h-[360px] w-full rounded-2xl border border-slate-200 bg-white object-contain"
+          >
+
+          <iframe
+            id="edit-payment-proof-pdf"
+            src=""
+            title="Proof of payment PDF"
+            class="mt-4 hidden h-[420px] w-full rounded-2xl border border-slate-200 bg-white"
+          ></iframe>
         </div>
 
         <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
